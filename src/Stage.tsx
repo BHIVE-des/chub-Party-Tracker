@@ -6,8 +6,9 @@ import {LoadResponse} from "@chub-ai/stages-ts/dist/types/load";
  TypeScript Interfaces for Party Tracker
  ***/
 interface StatEntry {
-    label: string;  // "HP", "AC", "Stress", etc.
-    value: string;  // "45", "16/18", "3/10", etc.
+    label: string;       // "HP", "AC", "Stress", etc.
+    currentValue: string; // "32", "18", "3", etc.
+    maxValue: string;     // "45", "", "5", etc. (optional - leave empty for single-value stats)
 }
 
 interface PartyMember {
@@ -62,13 +63,14 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
         
         if (messageState && messageState.members) {
             // Use messageState from the chat (most authoritative)
-            this.partyData = messageState;
+            this.partyData = this.migrateOldFormat(messageState);
         } else {
             // Try localStorage as fallback
             const saved = localStorage.getItem('party-tracker-data');
             if (saved) {
                 try {
-                    this.partyData = JSON.parse(saved);
+                    const parsed = JSON.parse(saved);
+                    this.partyData = this.migrateOldFormat(parsed);
                 } catch (e) {
                     console.error('Failed to parse saved party data:', e);
                     this.partyData = { members: [] };
@@ -77,6 +79,33 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 this.partyData = { members: [] };
             }
         }
+    }
+
+    // Migrate old single-value format to current/max format
+    private migrateOldFormat(data: any): PartyData {
+        if (!data || !data.members) return { members: [] };
+        
+        return {
+            members: data.members.map((member: any) => ({
+                ...member,
+                stats: member.stats?.map((stat: any) => {
+                    // If it has the old 'value' field, migrate it
+                    if ('value' in stat && !('currentValue' in stat)) {
+                        return {
+                            label: stat.label || '',
+                            currentValue: stat.value || '',
+                            maxValue: ''
+                        };
+                    }
+                    // Already in new format or handle missing fields
+                    return {
+                        label: stat.label || '',
+                        currentValue: stat.currentValue || '',
+                        maxValue: stat.maxValue || ''
+                    };
+                }) || []
+            }))
+        };
     }
 
     async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
@@ -143,8 +172,13 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 }
                 if (member.stats.length > 0) {
                     const statsStr = member.stats
-                        .filter(s => s.label.trim() || s.value.trim())
-                        .map(s => `${s.label}: ${s.value}`)
+                        .filter(s => s.label.trim() || s.currentValue.trim())
+                        .map(s => {
+                            const value = s.maxValue.trim() 
+                                ? `${s.currentValue}/${s.maxValue}` 
+                                : s.currentValue;
+                            return `${s.label}: ${value}`;
+                        })
                         .join(', ');
                     if (statsStr) {
                         info += `. Stats: ${statsStr}`;
@@ -265,7 +299,7 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
     const addStat = (memberId: string) => {
         const member = partyData.members.find(m => m.id === memberId);
         if (member) {
-            const newStats = [...member.stats, { label: '', value: '' }];
+            const newStats = [...member.stats, { label: '', currentValue: '', maxValue: '' }];
             updateMember(memberId, 'stats', newStats);
         }
     };
@@ -483,7 +517,7 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                                 onChange={(e) => updateStat(member.id, idx, 'label', e.target.value)}
                                                 placeholder="HP"
                                                 style={{
-                                                    flex: '0 0 80px',
+                                                    flex: '0 0 70px',
                                                     backgroundColor: '#252525',
                                                     border: '1px solid #444',
                                                     borderRadius: '4px',
@@ -494,9 +528,30 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                             />
                                             <input
                                                 type="text"
-                                                value={stat.value}
-                                                onChange={(e) => updateStat(member.id, idx, 'value', e.target.value)}
+                                                value={stat.currentValue}
+                                                onChange={(e) => updateStat(member.id, idx, 'currentValue', e.target.value)}
+                                                placeholder="32"
+                                                style={{
+                                                    flex: 1,
+                                                    backgroundColor: '#252525',
+                                                    border: '1px solid #444',
+                                                    borderRadius: '4px',
+                                                    padding: '6px 8px',
+                                                    color: '#fff',
+                                                    fontSize: '13px'
+                                                }}
+                                            />
+                                            <span style={{
+                                                color: '#666',
+                                                fontSize: '13px',
+                                                padding: '0 2px'
+                                            }}>/</span>
+                                            <input
+                                                type="text"
+                                                value={stat.maxValue}
+                                                onChange={(e) => updateStat(member.id, idx, 'maxValue', e.target.value)}
                                                 placeholder="45"
+                                                title="Leave empty for single-value stats (AC, STR, etc.)"
                                                 style={{
                                                     flex: 1,
                                                     backgroundColor: '#252525',
