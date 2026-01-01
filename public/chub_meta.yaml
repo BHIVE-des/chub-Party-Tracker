@@ -44,3 +44,6 @@ is_anonymous: false
 ratings_disabled: false
 
 # extension_id and github_path will be auto-generated on first push
+
+github_path: 'https://github.com/BHIVE-des/chub-Party-Tracker'
+
