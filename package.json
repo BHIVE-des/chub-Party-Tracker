@@ -1,5 +1,6 @@
 {
-  "name": "@chub-ai/stage-template",
+  "name": "@BHIVE-des/chub-Party-Tracker",
+  "description": "A flexible party/character tracker for RPG and roleplay chats",
   "private": false,
   "version": "0.0.0",
   "type": "module",

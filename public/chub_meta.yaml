@@ -1,77 +1,46 @@
-# All of these fields are optional, as is this file itself,
-#   in which case these values can be managed in the UI.
+# Party Tracker Stage Metadata
 
 # The name of the stage.
-# project_name: "Stage Template"
+project_name: "Party Tracker"
 
 # A short tagline to show in search.
-# tagline: "A base template for all stages."
+tagline: "Flexible character and party management for TTRPG roleplay."
 
 # 'PUBLIC', 'PRIVATE', or 'UNLISTED'.
-# visibility: 'PUBLIC'
+visibility: 'PUBLIC'
 
 # 'ADJACENT' | 'NONE' | 'COVER' | 'FULLSCREEN'
-# 'ADJACENT' is default. The frame will display on the side of the
-#   chat on desktop and above/in the top half of the chat on mobile.
-# 'NONE' will not display, only run.
-# 'COVER' will, indeed, cover the chat history completely,
-#   but leave the text input box.
-# 'FULLSCREEN' will make nothing below the header bar
-#   show except for your stage.
-# position: 'ADJACENT'
+# ADJACENT displays on the side of chat (desktop) or top (mobile)
+position: 'ADJACENT'
 
-# Self-explanatory.
-# tags:
-#  - 'Stage'
-#  - 'Admin'
-#  - 'Template'
-#  - 'Base'
+# Tags for discovery
+tags:
+  - 'TTRPG'
+  - 'Character'
+  - 'Party'
+  - 'Stats'
+  - 'Tracker'
+  - 'RPG'
 
-# The schema of any user-supplied config.
-# If your stage requires a configuration but has no
-#   defined schema, it won't work.
+# Config schema (currently unused, but required)
 config_schema:
   type: object
-  properties:
-    health:
-      type: integer
-      default: 100
+  properties: {}
 
-# The schema of the state that you store.
-# This isn't needed even if you do store state,
-#   and is here more for future use cases to
-#   optimize storage.
+# State schema - we use message state for party data
 state_schema:
-  init:
-    type: object
-    properties:
-      grid:
-        type: string
   message:
     type: object
     properties:
-      angry:
-        type: boolean
-        default: true
-  chat:
-    type: object
-    properties:
-      visited:
+      members:
         type: array
         items:
-          type: integer
+          type: object
 
-# Whether to publish as 'Anonymous' instead of under your username.
-# is_anonymous: false
+# Whether to publish anonymously
+is_anonymous: false
 
-# Self-explanatory.
-# ratings_disabled: false
+# Disable ratings
+ratings_disabled: false
 
-# This is here for future cases where ex. you need user secrets,
-#    but currently does nothing.
-# permissions:
-
-# extension_id is automatically generated on push with a new project;
-#    you should not make or set this value.
-# github_path will be added if it does not exist. It is the URL of the repo.
-
+# extension_id and github_path will be auto-generated on first push
