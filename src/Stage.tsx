@@ -61,24 +61,32 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
         // Initialize party data from messageState or localStorage
         const { messageState } = data;
         
+        console.log('[Party Tracker] Constructor - messageState:', messageState);
+        
         if (messageState && messageState.members) {
             // Use messageState from the chat (most authoritative)
+            console.log('[Party Tracker] Loading from messageState');
             this.partyData = this.migrateOldFormat(messageState);
         } else {
             // Try localStorage as fallback
+            console.log('[Party Tracker] messageState empty, trying localStorage');
             const saved = localStorage.getItem('party-tracker-data');
+            console.log('[Party Tracker] localStorage value:', saved);
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
                     this.partyData = this.migrateOldFormat(parsed);
+                    console.log('[Party Tracker] Loaded from localStorage:', this.partyData);
                 } catch (e) {
-                    console.error('Failed to parse saved party data:', e);
+                    console.error('[Party Tracker] Failed to parse saved party data:', e);
                     this.partyData = { members: [] };
                 }
             } else {
+                console.log('[Party Tracker] No localStorage data, starting fresh');
                 this.partyData = { members: [] };
             }
         }
+        console.log('[Party Tracker] Final partyData:', this.partyData);
     }
 
     // Migrate old single-value format to current/max format
@@ -119,19 +127,28 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
 
     async setState(state: MessageStateType): Promise<void> {
         // Handle state updates from swipes/jumps
+        console.log('[Party Tracker] setState called with:', state);
         if (state && state.members) {
             this.partyData = state;
             // Persist to localStorage
-            localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
+            try {
+                localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
+                console.log('[Party Tracker] setState saved to localStorage');
+            } catch (e) {
+                console.error('[Party Tracker] setState failed to save to localStorage:', e);
+            }
             // Trigger UI update if callback is set
             if (this.updateUICallback) {
                 this.updateUICallback();
             }
+        } else {
+            console.log('[Party Tracker] setState received invalid state');
         }
     }
 
     async beforePrompt(userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
         const { content } = userMessage;
+        console.log('[Party Tracker] beforePrompt called, current partyData:', this.partyData);
         
         // Search for character mentions in the user's message
         const mentionedCharacters: PartyMember[] = [];
@@ -191,6 +208,8 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
             stageDirections = charInfos.join('\n');
         }
         
+        console.log('[Party Tracker] Returning messageState:', this.partyData);
+        
         return {
             stageDirections,
             messageState: this.partyData,
@@ -219,7 +238,13 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
 
     updatePartyData(newData: PartyData): void {
         this.partyData = newData;
-        localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
+        console.log('[Party Tracker] Updating party data:', this.partyData);
+        try {
+            localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
+            console.log('[Party Tracker] Saved to localStorage successfully');
+        } catch (e) {
+            console.error('[Party Tracker] Failed to save to localStorage:', e);
+        }
     }
 
     setUpdateCallback(callback: () => void): void {
@@ -488,7 +513,9 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                     backgroundColor: '#1a1a1a',
                                     border: '1px solid #444',
                                     borderRadius: '4px',
-                                    padding: '12px'
+                                    padding: '12px',
+                                    width: '100%',
+                                    boxSizing: 'border-box'
                                 }}>
                                     <div style={{
                                         fontSize: '12px',
@@ -508,7 +535,9 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                                 display: 'flex',
                                                 gap: '8px',
                                                 marginBottom: '6px',
-                                                alignItems: 'center'
+                                                alignItems: 'center',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
                                             }}
                                         >
                                             <input
@@ -517,13 +546,15 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                                 onChange={(e) => updateStat(member.id, idx, 'label', e.target.value)}
                                                 placeholder="HP"
                                                 style={{
-                                                    flex: '0 0 70px',
+                                                    flex: '0 0 65px',
+                                                    minWidth: '65px',
                                                     backgroundColor: '#252525',
                                                     border: '1px solid #444',
                                                     borderRadius: '4px',
                                                     padding: '6px 8px',
                                                     color: '#fff',
-                                                    fontSize: '13px'
+                                                    fontSize: '13px',
+                                                    boxSizing: 'border-box'
                                                 }}
                                             />
                                             <input
@@ -533,33 +564,38 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                                 placeholder="32"
                                                 style={{
                                                     flex: 1,
+                                                    minWidth: '50px',
                                                     backgroundColor: '#252525',
                                                     border: '1px solid #444',
                                                     borderRadius: '4px',
                                                     padding: '6px 8px',
                                                     color: '#fff',
-                                                    fontSize: '13px'
+                                                    fontSize: '13px',
+                                                    boxSizing: 'border-box'
                                                 }}
                                             />
                                             <span style={{
                                                 color: '#666',
                                                 fontSize: '13px',
-                                                padding: '0 2px'
+                                                padding: '0 2px',
+                                                flexShrink: 0
                                             }}>/</span>
                                             <input
                                                 type="text"
                                                 value={stat.maxValue}
                                                 onChange={(e) => updateStat(member.id, idx, 'maxValue', e.target.value)}
-                                                placeholder="45"
-                                                title="Leave empty for single-value stats (AC, STR, etc.)"
+                                                placeholder="(max)"
+                                                title="Optional - Leave empty for single-value stats like AC, STR, etc."
                                                 style={{
                                                     flex: 1,
+                                                    minWidth: '50px',
                                                     backgroundColor: '#252525',
                                                     border: '1px solid #444',
                                                     borderRadius: '4px',
                                                     padding: '6px 8px',
                                                     color: '#fff',
-                                                    fontSize: '13px'
+                                                    fontSize: '13px',
+                                                    boxSizing: 'border-box'
                                                 }}
                                             />
                                             <button
