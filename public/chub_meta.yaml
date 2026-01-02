@@ -7,7 +7,7 @@ project_name: "Party Tracker"
 tagline: "Flexible character and party management for TTRPG roleplay."
 
 # 'PUBLIC', 'PRIVATE', or 'UNLISTED'.
-visibility: 'PUBLIC'
+visibility: 'PRIVATE'
 
 # 'ADJACENT' | 'NONE' | 'COVER' | 'FULLSCREEN'
 # ADJACENT displays on the side of chat (desktop) or top (mobile)

@@ -73,9 +73,25 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
     
     // Callback to trigger UI updates
     private updateUICallback?: () => void;
+    
+    // Get unique chat ID from URL
+    private getChatId(): string | null {
+        const match = window.location.pathname.match(/\/chats\/(\d+)/);
+        return match ? match[1] : null;
+    }
+    
+    // Get storage key scoped to current chat
+    private getStorageKey(): string {
+        const chatId = this.getChatId();
+        return chatId ? `party-tracker-data-chat-${chatId}` : 'party-tracker-data-global';
+    }
 
     constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
         super(data);
+        
+        // Log chat ID for debugging
+        const chatId = this.getChatId();
+        console.log('[Party Tracker] Loaded in chat:', chatId || 'unknown (using global storage)');
         
         // Initialize party data from messageState or localStorage
         const { messageState } = data;
@@ -84,8 +100,8 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
             // Use messageState from the chat (most authoritative)
             this.partyData = this.migrateOldFormat(messageState);
         } else {
-            // Try localStorage as fallback
-            const saved = localStorage.getItem('party-tracker-data');
+            // Try localStorage as fallback (scoped to this chat)
+            const saved = localStorage.getItem(this.getStorageKey());
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
@@ -147,9 +163,9 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
         // Handle state updates from swipes/jumps
         if (state && state.members) {
             this.partyData = state;
-            // Persist to localStorage
+            // Persist to localStorage (scoped to this chat)
             try {
-                localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
+                localStorage.setItem(this.getStorageKey(), JSON.stringify(this.partyData));
             } catch (e) {
                 console.error('[Party Tracker] Failed to save to localStorage:', e);
             }
@@ -277,7 +293,9 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
     updatePartyData(newData: PartyData): void {
         this.partyData = newData;
         try {
-            localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
+            const storageKey = this.getStorageKey();
+            localStorage.setItem(storageKey, JSON.stringify(this.partyData));
+            console.log('[Party Tracker] Saved to:', storageKey);
         } catch (e) {
             console.error('[Party Tracker] Failed to save to localStorage:', e);
         }
