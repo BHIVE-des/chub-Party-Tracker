@@ -32,6 +32,7 @@ interface PartyMember {
     conditions: Condition[];      // Status/condition tracking
     stats: StatEntry[];   // Flexible, user-defined
     secrets: string;      // Secret info - injected with DO NOT SHARE warning
+    images: string[];     // Array of image URLs for character gallery
     isActive: boolean;    // Toggle whether character is currently in scene
     isCollapsed: boolean; // UI state for expand/collapse
     showDebug: boolean;   // UI state for debug info toggle
@@ -109,6 +110,7 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 customFields: member.customFields || [],  // Add customFields if missing
                 conditions: member.conditions || [],      // Add conditions if missing
                 secrets: member.secrets || '',            // Add secrets if missing
+                images: member.images || [],              // Add images if missing
                 isActive: member.isActive !== undefined ? member.isActive : true, // Add isActive if missing (default true)
                 showDebug: member.showDebug !== undefined ? member.showDebug : false, // Add showDebug if missing
                 showSecrets: member.showSecrets !== undefined ? member.showSecrets : false, // Add showSecrets if missing
@@ -320,6 +322,7 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
             conditions: [],
             stats: [],
             secrets: '',
+            images: [],
             isActive: true,
             isCollapsed: false,
             showDebug: false,
@@ -482,6 +485,27 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
         }
     };
 
+    // Add image URL
+    const addImage = (memberId: string, url: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member && url.trim()) {
+            const newImages = [...member.images, url.trim()];
+            updateMember(memberId, 'images', newImages);
+        }
+    };
+
+    // Remove image
+    const removeImage = (memberId: string, imageIndex: number) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const newImages = member.images.filter((_, idx) => idx !== imageIndex);
+            updateMember(memberId, 'images', newImages);
+        }
+    };
+
+    // State for full-size image modal
+    const [fullSizeImage, setFullSizeImage] = useState<string | null>(null);
+
     // Generate injection preview for a member
     const getInjectionPreview = (member: PartyMember): string => {
         let info = `[${member.name}`;
@@ -610,7 +634,7 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                     onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
                     onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
                 >
-                    + Add Party Member
+                    + Introduce New Character
                 </button>
             </div>
 
@@ -658,6 +682,38 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                             >
                                 {member.isCollapsed ? '▶' : '▼'}
                             </button>
+                            {/* Thumbnail Image */}
+                            <div
+                                style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '50%',
+                                    overflow: 'hidden',
+                                    border: member.images.length > 0 ? '2px solid #555' : '2px dashed #555',
+                                    backgroundColor: '#1a1a1a',
+                                    flexShrink: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                {member.images.length > 0 ? (
+                                    <img
+                                        src={member.images[0]}
+                                        alt={member.name || 'Character'}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover'
+                                        }}
+                                        onError={(e) => {
+                                            e.currentTarget.style.display = 'none';
+                                        }}
+                                    />
+                                ) : (
+                                    <span style={{ fontSize: '18px', color: '#555' }}>🖼️</span>
+                                )}
+                            </div>
                             <input
                                 type="text"
                                 value={member.name}
@@ -717,7 +773,7 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                     type="text"
                                     value={member.tags}
                                     onChange={(e) => updateMember(member.id, 'tags', e.target.value)}
-                                    placeholder="human, female, ranger"
+                                    placeholder="comma, seperated, keywords,"
                                     style={{
                                         width: '100%',
                                         backgroundColor: '#1a1a1a',
@@ -730,6 +786,132 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                         marginBottom: '12px'
                                     }}
                                 />
+
+                                {/* Image Gallery Section */}
+                                <div style={{
+                                    backgroundColor: '#1a1a1a',
+                                    border: '1px solid #444',
+                                    borderRadius: '4px',
+                                    padding: '12px',
+                                    marginBottom: '12px',
+                                    boxSizing: 'border-box'
+                                }}>
+                                    <div style={{
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        color: '#aaa',
+                                        marginBottom: '8px',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        🖼️ Character Images
+                                    </div>
+
+                                    {/* Image URL Input */}
+                                    <input
+                                        type="text"
+                                        placeholder="Paste image URL and press Enter..."
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const input = e.currentTarget;
+                                                addImage(member.id, input.value);
+                                                input.value = '';
+                                            }
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            backgroundColor: '#252525',
+                                            border: '1px solid #444',
+                                            borderRadius: '4px',
+                                            padding: '8px',
+                                            color: '#fff',
+                                            fontSize: '13px',
+                                            marginBottom: '12px',
+                                            boxSizing: 'border-box'
+                                        }}
+                                    />
+
+                                    {/* Image Gallery Grid */}
+                                    {member.images.length > 0 && (
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                                            gap: '8px'
+                                        }}>
+                                            {member.images.map((imageUrl, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    style={{
+                                                        position: 'relative',
+                                                        width: '100%',
+                                                        paddingBottom: '100%',
+                                                        backgroundColor: '#252525',
+                                                        border: '2px dashed #444',
+                                                        borderRadius: '4px',
+                                                        overflow: 'hidden',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    onClick={() => setFullSizeImage(imageUrl)}
+                                                >
+                                                    <img
+                                                        src={imageUrl}
+                                                        alt={`${member.name} - ${idx + 1}`}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: 0,
+                                                            left: 0,
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            objectFit: 'cover'
+                                                        }}
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none';
+                                                        }}
+                                                    />
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            removeImage(member.id, idx);
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            top: '4px',
+                                                            right: '4px',
+                                                            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                                            color: '#fff',
+                                                            border: 'none',
+                                                            borderRadius: '50%',
+                                                            width: '24px',
+                                                            height: '24px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '16px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            padding: 0
+                                                        }}
+                                                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 0.8)'}
+                                                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.7)'}
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {member.images.length === 0 && (
+                                        <div style={{
+                                            textAlign: 'center',
+                                            padding: '20px',
+                                            color: '#666',
+                                            fontSize: '12px',
+                                            fontStyle: 'italic'
+                                        }}>
+                                            No images yet. Paste a URL above and press Enter!
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Secrets Section - Collapsible */}
                                 <div style={{
@@ -759,7 +941,7 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                         onMouseOut={(e) => e.currentTarget.style.color = '#888'}
                                     >
                                         <span style={{ fontSize: '14px' }}>🤫</span>
-                                        <span>{member.showSecrets ? '▼' : '▶'} Secrets (Hidden from Player)</span>
+                                        <span>{member.showSecrets ? '▼' : '▶'} Secrets (Hidden from User)</span>
                                     </button>
 
                                     {member.showSecrets && (
@@ -1224,9 +1406,62 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                             </div>
                         )}
                     </div>
-                ))}
-            </div>
+                ))}            </div>
         </div>
+
+        {/* Full-Size Image Modal */}
+        {fullSizeImage && (
+            <div
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    cursor: 'pointer'
+                }}
+                onClick={() => setFullSizeImage(null)}
+            >
+                <img
+                    src={fullSizeImage}
+                    alt="Full size"
+                    style={{
+                        maxWidth: '90%',
+                        maxHeight: '90%',
+                        objectFit: 'contain',
+                        borderRadius: '8px'
+                    }}
+                />
+                <button
+                    onClick={() => setFullSizeImage(null)}
+                    style={{
+                        position: 'absolute',
+                        top: '20px',
+                        right: '20px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
+                        fontSize: '24px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
+                >
+                    ×
+                </button>
+            </div>
+        )}
         </>
     );
 }
