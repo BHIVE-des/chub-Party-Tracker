@@ -11,13 +11,31 @@ interface StatEntry {
     maxValue: string;     // "45", "", "5", etc. (optional - leave empty for single-value stats)
 }
 
+interface CustomField {
+    id: string;
+    label: string;       // "Inventory", "Personality", "History", etc.
+    content: string;     // The actual text content
+}
+
+interface Condition {
+    id: string;
+    label: string;       // "Poisoned", "Blessed", "Cursed", etc.
+    isActive: boolean;   // Checkbox state
+}
+
 interface PartyMember {
     id: string;           // UUID
     name: string;
     tags: string;         // "human, female, ranger"
     description: string;
+    customFields: CustomField[];  // User-defined text sections
+    conditions: Condition[];      // Status/condition tracking
     stats: StatEntry[];   // Flexible, user-defined
+    secrets: string;      // Secret info - injected with DO NOT SHARE warning
+    isActive: boolean;    // Toggle whether character is currently in scene
     isCollapsed: boolean; // UI state for expand/collapse
+    showDebug: boolean;   // UI state for debug info toggle
+    showSecrets: boolean; // UI state for secrets section toggle
 }
 
 interface PartyData {
@@ -61,32 +79,24 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
         // Initialize party data from messageState or localStorage
         const { messageState } = data;
         
-        console.log('[Party Tracker] Constructor - messageState:', messageState);
-        
         if (messageState && messageState.members) {
             // Use messageState from the chat (most authoritative)
-            console.log('[Party Tracker] Loading from messageState');
             this.partyData = this.migrateOldFormat(messageState);
         } else {
             // Try localStorage as fallback
-            console.log('[Party Tracker] messageState empty, trying localStorage');
             const saved = localStorage.getItem('party-tracker-data');
-            console.log('[Party Tracker] localStorage value:', saved);
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
                     this.partyData = this.migrateOldFormat(parsed);
-                    console.log('[Party Tracker] Loaded from localStorage:', this.partyData);
                 } catch (e) {
                     console.error('[Party Tracker] Failed to parse saved party data:', e);
                     this.partyData = { members: [] };
                 }
             } else {
-                console.log('[Party Tracker] No localStorage data, starting fresh');
                 this.partyData = { members: [] };
             }
         }
-        console.log('[Party Tracker] Final partyData:', this.partyData);
     }
 
     // Migrate old single-value format to current/max format
@@ -96,6 +106,12 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
         return {
             members: data.members.map((member: any) => ({
                 ...member,
+                customFields: member.customFields || [],  // Add customFields if missing
+                conditions: member.conditions || [],      // Add conditions if missing
+                secrets: member.secrets || '',            // Add secrets if missing
+                isActive: member.isActive !== undefined ? member.isActive : true, // Add isActive if missing (default true)
+                showDebug: member.showDebug !== undefined ? member.showDebug : false, // Add showDebug if missing
+                showSecrets: member.showSecrets !== undefined ? member.showSecrets : false, // Add showSecrets if missing
                 stats: member.stats?.map((stat: any) => {
                     // If it has the old 'value' field, migrate it
                     if ('value' in stat && !('currentValue' in stat)) {
@@ -127,34 +143,32 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
 
     async setState(state: MessageStateType): Promise<void> {
         // Handle state updates from swipes/jumps
-        console.log('[Party Tracker] setState called with:', state);
         if (state && state.members) {
             this.partyData = state;
             // Persist to localStorage
             try {
                 localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
-                console.log('[Party Tracker] setState saved to localStorage');
             } catch (e) {
-                console.error('[Party Tracker] setState failed to save to localStorage:', e);
+                console.error('[Party Tracker] Failed to save to localStorage:', e);
             }
             // Trigger UI update if callback is set
             if (this.updateUICallback) {
                 this.updateUICallback();
             }
-        } else {
-            console.log('[Party Tracker] setState received invalid state');
         }
     }
 
     async beforePrompt(userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
         const { content } = userMessage;
-        console.log('[Party Tracker] beforePrompt called, current partyData:', this.partyData);
         
         // Search for character mentions in the user's message
         const mentionedCharacters: PartyMember[] = [];
         const messageLower = content.toLowerCase();
         
         for (const member of this.partyData.members) {
+            // Skip inactive characters
+            if (!member.isActive) continue;
+            
             // Skip empty names
             if (!member.name.trim()) continue;
             
@@ -187,6 +201,30 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 if (member.description.trim()) {
                     info += `: ${member.description}`;
                 }
+                // Add secrets with DO NOT SHARE warning
+                if (member.secrets.trim()) {
+                    info += `. ((DO NOT SHARE THIS SECRET: ${member.secrets}))`;
+                }
+                // Add active conditions
+                if (member.conditions && member.conditions.length > 0) {
+                    const activeConditions = member.conditions
+                        .filter(c => c.isActive && c.label.trim())
+                        .map(c => c.label)
+                        .join(', ');
+                    if (activeConditions) {
+                        info += `. Currently: ${activeConditions}`;
+                    }
+                }
+                // Add custom fields
+                if (member.customFields && member.customFields.length > 0) {
+                    const customFieldsText = member.customFields
+                        .filter(f => f.label.trim() && f.content.trim())
+                        .map(f => `${f.label}: ${f.content}`)
+                        .join('. ');
+                    if (customFieldsText) {
+                        info += `. ${customFieldsText}`;
+                    }
+                }
                 if (member.stats.length > 0) {
                     const statsStr = member.stats
                         .filter(s => s.label.trim() || s.currentValue.trim())
@@ -207,8 +245,6 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
             
             stageDirections = charInfos.join('\n');
         }
-        
-        console.log('[Party Tracker] Returning messageState:', this.partyData);
         
         return {
             stageDirections,
@@ -238,10 +274,8 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
 
     updatePartyData(newData: PartyData): void {
         this.partyData = newData;
-        console.log('[Party Tracker] Updating party data:', this.partyData);
         try {
             localStorage.setItem('party-tracker-data', JSON.stringify(this.partyData));
-            console.log('[Party Tracker] Saved to localStorage successfully');
         } catch (e) {
             console.error('[Party Tracker] Failed to save to localStorage:', e);
         }
@@ -282,8 +316,14 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
             name: '',
             tags: '',
             description: '',
+            customFields: [],
+            conditions: [],
             stats: [],
-            isCollapsed: false
+            secrets: '',
+            isActive: true,
+            isCollapsed: false,
+            showDebug: false,
+            showSecrets: false
         };
         const newData = {
             members: [...partyData.members, newMember]
@@ -349,17 +389,202 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
         }
     };
 
+    // Add a custom field to a member
+    const addCustomField = (memberId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const newFields = [...member.customFields, { id: generateId(), label: '', content: '' }];
+            updateMember(memberId, 'customFields', newFields);
+        }
+    };
+
+    // Update a custom field
+    const updateCustomField = (memberId: string, fieldId: string, key: keyof CustomField, value: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const newFields = member.customFields.map(f => 
+                f.id === fieldId ? { ...f, [key]: value } : f
+            );
+            updateMember(memberId, 'customFields', newFields);
+        }
+    };
+
+    // Remove a custom field
+    const removeCustomField = (memberId: string, fieldId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const newFields = member.customFields.filter(f => f.id !== fieldId);
+            updateMember(memberId, 'customFields', newFields);
+        }
+    };
+
+    // Add a condition to a member
+    const addCondition = (memberId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const newConditions = [...member.conditions, { id: generateId(), label: '', isActive: false }];
+            updateMember(memberId, 'conditions', newConditions);
+        }
+    };
+
+    // Update a condition
+    const updateCondition = (memberId: string, conditionId: string, key: keyof Condition, value: any) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const newConditions = member.conditions.map(c => 
+                c.id === conditionId ? { ...c, [key]: value } : c
+            );
+            updateMember(memberId, 'conditions', newConditions);
+        }
+    };
+
+    // Toggle condition active state
+    const toggleCondition = (memberId: string, conditionId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const condition = member.conditions.find(c => c.id === conditionId);
+            if (condition) {
+                updateCondition(memberId, conditionId, 'isActive', !condition.isActive);
+            }
+        }
+    };
+
+    // Remove a condition
+    const removeCondition = (memberId: string, conditionId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            const newConditions = member.conditions.filter(c => c.id !== conditionId);
+            updateMember(memberId, 'conditions', newConditions);
+        }
+    };
+
+    // Toggle debug info display
+    const toggleDebug = (memberId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            updateMember(memberId, 'showDebug', !member.showDebug);
+        }
+    };
+
+    // Toggle secrets display
+    const toggleSecrets = (memberId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            updateMember(memberId, 'showSecrets', !member.showSecrets);
+        }
+    };
+
+    // Toggle active state
+    const toggleActive = (memberId: string) => {
+        const member = partyData.members.find(m => m.id === memberId);
+        if (member) {
+            updateMember(memberId, 'isActive', !member.isActive);
+        }
+    };
+
+    // Generate injection preview for a member
+    const getInjectionPreview = (member: PartyMember): string => {
+        let info = `[${member.name}`;
+        if (member.tags.trim()) {
+            info += ` (${member.tags})`;
+        }
+        if (member.description.trim()) {
+            info += `: ${member.description}`;
+        }
+        // Add secrets with DO NOT SHARE warning
+        if (member.secrets.trim()) {
+            info += `. ((DO NOT SHARE THIS SECRET: ${member.secrets}))`;
+        }
+        // Add active conditions
+        if (member.conditions && member.conditions.length > 0) {
+            const activeConditions = member.conditions
+                .filter(c => c.isActive && c.label.trim())
+                .map(c => c.label)
+                .join(', ');
+            if (activeConditions) {
+                info += `. Currently: ${activeConditions}`;
+            }
+        }
+        // Add custom fields
+        if (member.customFields && member.customFields.length > 0) {
+            const customFieldsText = member.customFields
+                .filter(f => f.label.trim() && f.content.trim())
+                .map(f => `${f.label}: ${f.content}`)
+                .join('. ');
+            if (customFieldsText) {
+                info += `. ${customFieldsText}`;
+            }
+        }
+        if (member.stats.length > 0) {
+            const statsStr = member.stats
+                .filter(s => s.label.trim() || s.currentValue.trim())
+                .map(s => {
+                    const value = s.maxValue.trim() 
+                        ? `${s.currentValue}/${s.maxValue}` 
+                        : s.currentValue;
+                    return `${s.label}: ${value}`;
+                })
+                .join(', ');
+            if (statsStr) {
+                info += `. Stats: ${statsStr}`;
+            }
+        }
+        info += `]`;
+        return info;
+    };
+
+    // Estimate token count (rough approximation: ~4 characters per token)
+    const estimateTokens = (text: string): number => {
+        return Math.ceil(text.length / 4);
+    };
+
+    // Copy text to clipboard
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text).catch(err => {
+            console.error('Failed to copy:', err);
+        });
+    };
+
     return (
-        <div style={{
-            width: '100%',
-            height: '100vh',
-            padding: '16px',
-            backgroundColor: 'rgba(26, 26, 26, 0.95)',
-            color: '#e0e0e0',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            overflow: 'auto',
-            backdropFilter: 'blur(8px)'
-        }}>
+        <>
+            <style>{`
+                /* Scrollbar styling for Party Tracker main container */
+                .party-tracker-container {
+                    overflow-y: scroll !important;
+                    overflow-x: hidden !important;
+                    scrollbar-width: thin;
+                    scrollbar-color: #555 #2a2a2a;
+                }
+                .party-tracker-container::-webkit-scrollbar {
+                    width: 10px;
+                }
+                .party-tracker-container::-webkit-scrollbar-track {
+                    background: #2a2a2a;
+                    border-radius: 5px;
+                }
+                .party-tracker-container::-webkit-scrollbar-thumb {
+                    background: #555;
+                    border-radius: 5px;
+                }
+                .party-tracker-container::-webkit-scrollbar-thumb:hover {
+                    background: #666;
+                }
+            `}</style>
+            <div 
+                className="party-tracker-container"
+                style={{
+                    width: '100%',
+                    height: '100vh',
+                    padding: '16px',
+                    backgroundColor: 'rgba(26, 26, 26, 0.95)',
+                    color: '#e0e0e0',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    overflowY: 'scroll',
+                    overflowX: 'hidden',
+                    backdropFilter: 'blur(8px)',
+                    boxSizing: 'border-box',
+                    position: 'relative'
+                } as React.CSSProperties}>
             {/* Header */}
             <div style={{
                 marginBottom: '16px',
@@ -417,7 +642,8 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px',
-                            marginBottom: member.isCollapsed ? '0' : '12px'
+                            marginBottom: member.isCollapsed ? '0' : '12px',
+                            opacity: member.isActive ? 1 : 0.5
                         }}>
                             <button
                                 onClick={() => toggleCollapse(member.id)}
@@ -448,6 +674,23 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                     fontWeight: 600
                                 }}
                             />
+                            <button
+                                onClick={() => toggleActive(member.id)}
+                                title={member.isActive ? "Character is active (will be injected when mentioned)" : "Character is inactive (will NOT be injected)"}
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: member.isActive ? '#ffd700' : '#555',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '20px',
+                                    padding: '4px 8px',
+                                    transition: 'transform 0.1s'
+                                }}
+                                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
+                                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                            >
+                                {member.isActive ? '⭐' : '☆'}
+                            </button>
                             <button
                                 onClick={() => removeMember(member.id)}
                                 style={{
@@ -488,6 +731,69 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                     }}
                                 />
 
+                                {/* Secrets Section - Collapsible */}
+                                <div style={{
+                                    backgroundColor: '#1a1a1a',
+                                    border: '1px solid #444',
+                                    borderRadius: '4px',
+                                    padding: '8px 12px',
+                                    boxSizing: 'border-box',
+                                    marginBottom: '12px'
+                                }}>
+                                    <button
+                                        onClick={() => toggleSecrets(member.id)}
+                                        style={{
+                                            width: '100%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            backgroundColor: 'transparent',
+                                            border: 'none',
+                                            color: '#888',
+                                            cursor: 'pointer',
+                                            fontSize: '12px',
+                                            padding: '4px 0',
+                                            textAlign: 'left'
+                                        }}
+                                        onMouseOver={(e) => e.currentTarget.style.color = '#aaa'}
+                                        onMouseOut={(e) => e.currentTarget.style.color = '#888'}
+                                    >
+                                        <span style={{ fontSize: '14px' }}>🤫</span>
+                                        <span>{member.showSecrets ? '▼' : '▶'} Secrets (Hidden from Player)</span>
+                                    </button>
+
+                                    {member.showSecrets && (
+                                        <div style={{ marginTop: '8px' }}>
+                                            <textarea
+                                                value={member.secrets}
+                                                onChange={(e) => updateMember(member.id, 'secrets', e.target.value)}
+                                                placeholder="Secret information that AI should not reveal unless dramatically appropriate or intimate..."
+                                                rows={3}
+                                                style={{
+                                                    width: '100%',
+                                                    backgroundColor: '#252525',
+                                                    border: '1px solid #555',
+                                                    borderRadius: '4px',
+                                                    padding: '8px',
+                                                    color: '#e0e0e0',
+                                                    fontSize: '13px',
+                                                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                                                    resize: 'vertical',
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            />
+                                            <div style={{
+                                                fontSize: '11px',
+                                                color: '#666',
+                                                marginTop: '4px',
+                                                fontStyle: 'italic'
+                                            }}>
+                                                ⚠️ AI will be instructed: "DO NOT SHARE THIS SECRET" unless appropriate
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 {/* Description */}
                                 <textarea
                                     value={member.description}
@@ -504,9 +810,200 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                         fontSize: '13px',
                                         marginBottom: '12px',
                                         fontFamily: 'system-ui, -apple-system, sans-serif',
-                                        resize: 'vertical'
+                                        resize: 'vertical',
+                                        boxSizing: 'border-box'
                                     }}
                                 />
+
+                                {/* Custom Fields Section */}
+                                {member.customFields.map((field) => (
+                                    <div
+                                        key={field.id}
+                                        style={{
+                                            marginBottom: '12px',
+                                            backgroundColor: '#1a1a1a',
+                                            border: '1px solid #444',
+                                            borderRadius: '4px',
+                                            padding: '10px',
+                                            boxSizing: 'border-box'
+                                        }}
+                                    >
+                                        <div style={{
+                                            display: 'flex',
+                                            gap: '8px',
+                                            marginBottom: '8px',
+                                            alignItems: 'center'
+                                        }}>
+                                            <input
+                                                type="text"
+                                                value={field.label}
+                                                onChange={(e) => updateCustomField(member.id, field.id, 'label', e.target.value)}
+                                                placeholder="Field Name (e.g., Inventory, Personality)"
+                                                style={{
+                                                    flex: 1,
+                                                    backgroundColor: '#252525',
+                                                    border: '1px solid #555',
+                                                    borderRadius: '4px',
+                                                    padding: '6px 8px',
+                                                    color: '#fff',
+                                                    fontSize: '13px',
+                                                    fontWeight: 600,
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            />
+                                            <button
+                                                onClick={() => removeCustomField(member.id, field.id)}
+                                                style={{
+                                                    backgroundColor: 'transparent',
+                                                    color: '#999',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    fontSize: '16px',
+                                                    padding: '4px 8px'
+                                                }}
+                                                onMouseOver={(e) => e.currentTarget.style.color = '#ff6666'}
+                                                onMouseOut={(e) => e.currentTarget.style.color = '#999'}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                        <textarea
+                                            value={field.content}
+                                            onChange={(e) => updateCustomField(member.id, field.id, 'content', e.target.value)}
+                                            placeholder="Enter content..."
+                                            rows={3}
+                                            style={{
+                                                width: '100%',
+                                                backgroundColor: '#252525',
+                                                border: '1px solid #555',
+                                                borderRadius: '4px',
+                                                padding: '8px',
+                                                color: '#e0e0e0',
+                                                fontSize: '13px',
+                                                fontFamily: 'system-ui, -apple-system, sans-serif',
+                                                resize: 'vertical',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
+                                ))}
+
+                                {/* Add Custom Field Button */}
+                                <button
+                                    onClick={() => addCustomField(member.id)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px',
+                                        backgroundColor: '#2a2a5a',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px',
+                                        marginBottom: '12px'
+                                    }}
+                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#353575'}
+                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a2a5a'}
+                                >
+                                    + Add Custom Field
+                                </button>
+
+                                {/* Conditions Section */}
+                                <div style={{
+                                    backgroundColor: '#1a1a1a',
+                                    border: '1px solid #444',
+                                    borderRadius: '4px',
+                                    padding: '12px',
+                                    marginBottom: '12px',
+                                    boxSizing: 'border-box'
+                                }}>
+                                    <div style={{
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        color: '#aaa',
+                                        marginBottom: '8px',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        Conditions
+                                    </div>
+
+                                    {member.conditions.map((condition) => (
+                                        <div
+                                            key={condition.id}
+                                            style={{
+                                                display: 'flex',
+                                                gap: '8px',
+                                                marginBottom: '6px',
+                                                alignItems: 'center'
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={condition.isActive}
+                                                onChange={() => toggleCondition(member.id, condition.id)}
+                                                style={{
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    cursor: 'pointer',
+                                                    accentColor: '#4a7a4a',
+                                                    flexShrink: 0
+                                                }}
+                                            />
+                                            <input
+                                                type="text"
+                                                value={condition.label}
+                                                onChange={(e) => updateCondition(member.id, condition.id, 'label', e.target.value)}
+                                                placeholder="Condition name (e.g., Poisoned, Blessed)"
+                                                style={{
+                                                    flex: 1,
+                                                    backgroundColor: '#252525',
+                                                    border: '1px solid #444',
+                                                    borderRadius: '4px',
+                                                    padding: '6px 8px',
+                                                    color: condition.isActive ? '#fff' : '#888',
+                                                    fontSize: '13px',
+                                                    textDecoration: condition.isActive ? 'none' : 'line-through',
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            />
+                                            <button
+                                                onClick={() => removeCondition(member.id, condition.id)}
+                                                style={{
+                                                    backgroundColor: 'transparent',
+                                                    color: '#999',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    fontSize: '16px',
+                                                    padding: '4px 8px'
+                                                }}
+                                                onMouseOver={(e) => e.currentTarget.style.color = '#ff6666'}
+                                                onMouseOut={(e) => e.currentTarget.style.color = '#999'}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    <button
+                                        onClick={() => addCondition(member.id)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px',
+                                            backgroundColor: '#2a3a5a',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontSize: '12px',
+                                            marginTop: '8px'
+                                        }}
+                                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#354a75'}
+                                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a3a5a'}
+                                    >
+                                        + Add Condition
+                                    </button>
+                                </div>
 
                                 {/* Stats Section */}
                                 <div style={{
@@ -515,7 +1012,8 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                     borderRadius: '4px',
                                     padding: '12px',
                                     width: '100%',
-                                    boxSizing: 'border-box'
+                                    boxSizing: 'border-box',
+                                    marginBottom: '12px'
                                 }}>
                                     <div style={{
                                         fontSize: '12px',
@@ -635,11 +1133,100 @@ function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                                         + Add Stat
                                     </button>
                                 </div>
+
+                                {/* Debug Info Section */}
+                                <div style={{
+                                    backgroundColor: '#1a1a1a',
+                                    border: '1px solid #444',
+                                    borderRadius: '4px',
+                                    padding: '8px 12px',
+                                    boxSizing: 'border-box'
+                                }}>
+                                    <button
+                                        onClick={() => toggleDebug(member.id)}
+                                        style={{
+                                            width: '100%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            backgroundColor: 'transparent',
+                                            border: 'none',
+                                            color: '#888',
+                                            cursor: 'pointer',
+                                            fontSize: '12px',
+                                            padding: '4px 0',
+                                            textAlign: 'left'
+                                        }}
+                                        onMouseOver={(e) => e.currentTarget.style.color = '#aaa'}
+                                        onMouseOut={(e) => e.currentTarget.style.color = '#888'}
+                                    >
+                                        <span style={{ fontSize: '14px' }}>⚙️</span>
+                                        <span>{member.showDebug ? '▼' : '▶'} Debug Info</span>
+                                    </button>
+
+                                    {member.showDebug && (
+                                        <div style={{ marginTop: '8px' }}>
+                                            <div style={{
+                                                fontSize: '11px',
+                                                fontWeight: 600,
+                                                color: '#888',
+                                                marginBottom: '4px',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                Injection Preview:
+                                            </div>
+                                            <div style={{
+                                                backgroundColor: '#252525',
+                                                border: '1px solid #333',
+                                                borderRadius: '4px',
+                                                padding: '8px',
+                                                fontFamily: 'monospace',
+                                                fontSize: '11px',
+                                                color: '#ddd',
+                                                whiteSpace: 'pre-wrap',
+                                                wordBreak: 'break-word',
+                                                marginBottom: '8px',
+                                                maxHeight: '150px',
+                                                overflow: 'auto',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                {getInjectionPreview(member)}
+                                            </div>
+                                            <div style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                fontSize: '11px',
+                                                color: '#888'
+                                            }}>
+                                                <span>Estimated Tokens: <strong style={{ color: '#aaa' }}>~{estimateTokens(getInjectionPreview(member))}</strong></span>
+                                                <button
+                                                    onClick={() => copyToClipboard(getInjectionPreview(member))}
+                                                    style={{
+                                                        backgroundColor: '#2a3a5a',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        borderRadius: '3px',
+                                                        padding: '4px 8px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '11px'
+                                                    }}
+                                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#354a75'}
+                                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a3a5a'}
+                                                >
+                                                    📋 Copy
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
                 ))}
             </div>
         </div>
+        </>
     );
 }
