@@ -14,6 +14,11 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
     // State for full-size image modal
     const [fullSizeImage, setFullSizeImage] = useState<string | null>(null);
     
+    // State for import/export modals
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importText, setImportText] = useState('');
+    
     useEffect(() => {
         // Set up callback so Stage can trigger re-renders
         stage.setUpdateCallback(() => forceUpdate({}));
@@ -377,56 +382,37 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
         });
     };
 
-    // Export party data as JSON file
+    // Export party data as JSON (show modal)
     const exportData = () => {
-        const dataStr = JSON.stringify(partyData, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        const timestamp = new Date().toISOString().split('T')[0];
-        link.download = `party-tracker-backup-${timestamp}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        setShowExportModal(true);
     };
 
-    // Import party data from JSON file
-    const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const content = e.target?.result as string;
-                const imported = JSON.parse(content);
-                
-                // Validate basic structure
-                if (!imported || typeof imported !== 'object') {
-                    alert('Invalid file format: Not a valid JSON object');
-                    return;
-                }
-                
-                if (!Array.isArray(imported.members)) {
-                    alert('Invalid file format: Missing or invalid members array');
-                    return;
-                }
-
-                // Import and update
-                stage.updatePartyData(imported);
-                forceUpdate({});
-                alert(`Successfully imported! ${imported.members.length} party members loaded.`);
-            } catch (error) {
-                alert('Failed to import: Invalid JSON file');
-                console.error('Import error:', error);
+    // Import party data from JSON text
+    const importData = () => {
+        try {
+            const imported = JSON.parse(importText);
+            
+            // Validate basic structure
+            if (!imported || typeof imported !== 'object') {
+                alert('Invalid format: Not a valid JSON object');
+                return;
             }
-        };
-        reader.readAsText(file);
-        
-        // Reset input so same file can be imported again
-        event.target.value = '';
+            
+            if (!Array.isArray(imported.members)) {
+                alert('Invalid format: Missing or invalid members array');
+                return;
+            }
+
+            // Import and update
+            stage.updatePartyData(imported);
+            forceUpdate({});
+            setShowImportModal(false);
+            setImportText('');
+            alert(`Successfully imported! ${imported.members.length} party members loaded.`);
+        } catch (error) {
+            alert('Failed to import: Invalid JSON format');
+            console.error('Import error:', error);
+        }
     };
 
     /***
@@ -504,11 +490,12 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                             }}
                             onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#354a75'}
                             onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a3a5a'}
-                            title="Export party data as JSON file"
+                            title="Export party data as JSON"
                         >
                             📥 Export
                         </button>
-                        <label
+                        <button
+                            onClick={() => setShowImportModal(true)}
                             style={{
                                 padding: '6px 12px',
                                 backgroundColor: '#2a5a2a',
@@ -524,16 +511,10 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                             }}
                             onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
                             onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
-                            title="Import party data from JSON file"
+                            title="Import party data from JSON"
                         >
                             📤 Import
-                            <input
-                                type="file"
-                                accept=".json"
-                                onChange={importData}
-                                style={{ display: 'none' }}
-                            />
-                        </label>
+                        </button>
                     </div>
                 </div>
                 
@@ -1895,6 +1876,223 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                 >
                     ×
                 </button>
+            </div>
+        )}
+
+        {/* Export Modal */}
+        {showExportModal && (
+            <div
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10000
+                }}
+                onClick={() => setShowExportModal(false)}
+            >
+                <div
+                    style={{
+                        backgroundColor: '#1a1a1a',
+                        border: '2px solid #444',
+                        borderRadius: '8px',
+                        padding: '24px',
+                        maxWidth: '600px',
+                        width: '90%',
+                        maxHeight: '80vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '16px'
+                    }}>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#fff' }}>
+                            📥 Export Party Data
+                        </h3>
+                        <button
+                            onClick={() => setShowExportModal(false)}
+                            style={{
+                                backgroundColor: 'transparent',
+                                color: '#999',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '24px',
+                                padding: '4px 8px'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.color = '#fff'}
+                            onMouseOut={(e) => e.currentTarget.style.color = '#999'}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    
+                    <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#aaa' }}>
+                        Copy this JSON and save it to a file (e.g., party-backup.json)
+                    </p>
+
+                    <textarea
+                        readOnly
+                        value={JSON.stringify(partyData, null, 2)}
+                        style={{
+                            flex: 1,
+                            backgroundColor: '#252525',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            padding: '12px',
+                            color: '#e0e0e0',
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                            resize: 'none',
+                            marginBottom: '12px',
+                            minHeight: '300px'
+                        }}
+                    />
+
+                    <button
+                        onClick={() => {
+                            copyToClipboard(JSON.stringify(partyData, null, 2));
+                            alert('Copied to clipboard!');
+                        }}
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            backgroundColor: '#2a3a5a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 500
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#354a75'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a3a5a'}
+                    >
+                        📋 Copy to Clipboard
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {/* Import Modal */}
+        {showImportModal && (
+            <div
+                style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10000
+                }}
+                onClick={() => {
+                    setShowImportModal(false);
+                    setImportText('');
+                }}
+            >
+                <div
+                    style={{
+                        backgroundColor: '#1a1a1a',
+                        border: '2px solid #444',
+                        borderRadius: '8px',
+                        padding: '24px',
+                        maxWidth: '600px',
+                        width: '90%',
+                        maxHeight: '80vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '16px'
+                    }}>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#fff' }}>
+                            📤 Import Party Data
+                        </h3>
+                        <button
+                            onClick={() => {
+                                setShowImportModal(false);
+                                setImportText('');
+                            }}
+                            style={{
+                                backgroundColor: 'transparent',
+                                color: '#999',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '24px',
+                                padding: '4px 8px'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.color = '#fff'}
+                            onMouseOut={(e) => e.currentTarget.style.color = '#999'}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    
+                    <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#aaa' }}>
+                        Paste your exported JSON data below
+                    </p>
+
+                    <textarea
+                        value={importText}
+                        onChange={(e) => setImportText(e.target.value)}
+                        placeholder='{\n  "members": [...],\n  "userCharacter": {...}\n}'
+                        style={{
+                            flex: 1,
+                            backgroundColor: '#252525',
+                            border: '1px solid #444',
+                            borderRadius: '4px',
+                            padding: '12px',
+                            color: '#e0e0e0',
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                            resize: 'none',
+                            marginBottom: '12px',
+                            minHeight: '300px'
+                        }}
+                    />
+
+                    <button
+                        onClick={importData}
+                        disabled={!importText.trim()}
+                        style={{
+                            width: '100%',
+                            padding: '12px',
+                            backgroundColor: importText.trim() ? '#2a5a2a' : '#333',
+                            color: importText.trim() ? '#fff' : '#666',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: importText.trim() ? 'pointer' : 'not-allowed',
+                            fontSize: '14px',
+                            fontWeight: 500
+                        }}
+                        onMouseOver={(e) => {
+                            if (importText.trim()) e.currentTarget.style.backgroundColor = '#357535';
+                        }}
+                        onMouseOut={(e) => {
+                            if (importText.trim()) e.currentTarget.style.backgroundColor = '#2a5a2a';
+                        }}
+                    >
+                        ✅ Import Data
+                    </button>
+                </div>
             </div>
         )}
         </>
