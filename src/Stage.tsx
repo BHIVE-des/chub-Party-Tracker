@@ -149,7 +149,8 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                             inventory: [],
                             notes: '',
                             showDebug: false
-                        }
+                        },
+                        quests: []
                     };
                 }
             } else {
@@ -163,7 +164,8 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                         inventory: [],
                         notes: '',
                         showDebug: false
-                    }
+                    },
+                    quests: []
                 };
             }
         }
