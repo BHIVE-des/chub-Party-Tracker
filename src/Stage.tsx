@@ -50,9 +50,28 @@ export interface UserCharacter {
     showDebug: boolean;   // UI state for debug info toggle
 }
 
+export interface Objective {
+    id: string;
+    label: string;        // "Find the sword", "Talk to the king"
+    isComplete: boolean;  // Checkbox state
+}
+
+export interface Quest {
+    id: string;
+    name: string;         // "Rescue the Princess" (user-facing)
+    nextGoal: string;     // "find her location in the dungeons" (AI directive - INJECTED)
+    objectives: Objective[];  // User checklist (NOT injected)
+    notes: string;        // Private notes (NOT injected)
+    status: 'active' | 'complete' | 'failed';  // Quest status
+    isActive: boolean;    // Toggle whether quest steers the narrative (⭐)
+    isCollapsed: boolean; // UI state
+    showDebug: boolean;   // UI state for debug info
+}
+
 export interface PartyData {
     members: PartyMember[];
     userCharacter: UserCharacter;
+    quests: Quest[];
 }
 
 /***
@@ -162,7 +181,8 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 inventory: [],
                 notes: '',
                 showDebug: false
-            }
+            },
+            quests: []
         };
         
         return {
@@ -200,7 +220,8 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 inventory: [],
                 notes: '',
                 showDebug: false
-            }
+            },
+            quests: data.quests || []
         };
     }
 
@@ -240,7 +261,7 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
         // Inject User Character info (always included if data exists)
         const user = this.partyData.userCharacter;
         if (user.name.trim() || user.description.trim() || user.class.trim() || user.stats.length > 0 || user.inventory.length > 0) {
-            let userInfo = `[USER CHARACTER`;
+            let userInfo = `[PARTY TRACKER - USER`;
             if (user.name.trim()) {
                 userInfo += `: ${user.name}`;
             }
@@ -306,12 +327,12 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
         // If characters were mentioned, inject their info
         if (mentionedCharacters.length > 0) {
             const charInfos = mentionedCharacters.map(member => {
-                let info = `[${member.name}`;
+                let info = `[PARTY TRACKER - PARTY: ${member.name}`;
                 if (member.tags.trim()) {
                     info += ` (${member.tags})`;
                 }
                 if (member.description.trim()) {
-                    info += `: ${member.description}`;
+                    info += ` - ${member.description}`;
                 }
                 // Add secrets with DO NOT SHARE warning
                 if (member.secrets.trim()) {
@@ -356,6 +377,16 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
             });
             
             directionsParts.push(...charInfos);
+        }
+        
+        // Inject active quests (directive-based narrative steering)
+        const activeQuests = this.partyData.quests.filter(q => q.isActive && q.nextGoal.trim());
+        if (activeQuests.length > 0) {
+            const questGoals = activeQuests
+                .map(q => q.nextGoal.trim())
+                .join(', ');
+            const questInfo = `[PARTY TRACKER - QUESTS: Steer the conversation toward ${questGoals}]`;
+            directionsParts.push(questInfo);
         }
         
         // Combine all directions
