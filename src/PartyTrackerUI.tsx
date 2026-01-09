@@ -1,8 +1,9 @@
 import {ReactElement, useState, useEffect} from "react";
-import {Stage, PartyMember, UserCharacter, Quest} from "./Stage";
+import {Stage, PartyMember, UserCharacter, Quest, WorldData} from "./Stage";
 import { UserTab } from "./tabs/UserTab";
 import { PartyTab } from "./tabs/PartyTab";
 import { QuestsTab } from "./tabs/QuestsTab";
+import { WorldTab } from "./tabs/WorldTab";
 
 /***
  Main Party Tracker UI Component - Coordinator
@@ -190,6 +191,20 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
     };
 
     /***
+     * WORLD FUNCTIONS
+     ***/
+
+    // Update a world field
+    const updateWorld = (field: keyof WorldData, value: any) => {
+        const newData = {
+            ...partyData,
+            world: { ...partyData.world, [field]: value }
+        };
+        stage.updatePartyData(newData);
+        forceUpdate({});
+    };
+
+    /***
      * RENDER
      ***/
 
@@ -368,20 +383,25 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                         📜 Quests
                     </button>
                     <button
-                        disabled
+                        onClick={() => setActiveTab('world')}
                         style={{
                             flex: 1,
                             padding: '10px',
-                            backgroundColor: '#1a1a1a',
-                            color: '#555',
-                            border: '1px solid #333',
+                            backgroundColor: activeTab === 'world' ? '#2a5a2a' : '#252525',
+                            color: '#fff',
+                            border: activeTab === 'world' ? '2px solid #357535' : '1px solid #444',
                             borderRadius: '4px',
-                            cursor: 'not-allowed',
+                            cursor: 'pointer',
                             fontSize: '14px',
-                            fontWeight: 400,
-                            opacity: 0.5
+                            fontWeight: activeTab === 'world' ? 600 : 400,
+                            transition: 'all 0.2s'
                         }}
-                        title="Coming Soon!"
+                        onMouseOver={(e) => {
+                            if (activeTab !== 'world') e.currentTarget.style.backgroundColor = '#2a2a2a';
+                        }}
+                        onMouseOut={(e) => {
+                            if (activeTab !== 'world') e.currentTarget.style.backgroundColor = '#252525';
+                        }}
                     >
                         🌍 World
                     </button>
@@ -417,6 +437,16 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                         addQuest={addQuest}
                         removeQuest={removeQuest}
                         updateQuest={updateQuest}
+                        estimateTokens={estimateTokens}
+                        copyToClipboard={copyToClipboard}
+                        generateId={generateId}
+                    />
+                )}
+
+                {activeTab === 'world' && (
+                    <WorldTab
+                        world={partyData.world}
+                        updateWorld={updateWorld}
                         estimateTokens={estimateTokens}
                         copyToClipboard={copyToClipboard}
                         generateId={generateId}

@@ -68,10 +68,40 @@ export interface Quest {
     showDebug: boolean;   // UI state for debug info
 }
 
+export interface Location {
+    id: string;
+    name: string;
+    description: string;
+    isActive: boolean;    // Inject when mentioned?
+    isCollapsed: boolean; // UI state
+}
+
+export interface LoreEntry {
+    id: string;
+    title: string;
+    content: string;
+    tags: string;         // Comma-separated tags for categorization
+    isCollapsed: boolean; // UI state
+}
+
+export interface ClockState {
+    enabled: boolean;
+    currentTime: string;  // e.g., "Day 3, 14:30" or "3rd Moon, Evening"
+    format: 'custom' | 'numeric';  // Freeform vs structured
+    notes: string;        // Private DM notes about time-sensitive events
+}
+
+export interface WorldData {
+    locations: Location[];
+    lore: LoreEntry[];
+    clock: ClockState;
+}
+
 export interface PartyData {
     members: PartyMember[];
     userCharacter: UserCharacter;
     quests: Quest[];
+    world: WorldData;
 }
 
 /***
@@ -150,7 +180,17 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                             notes: '',
                             showDebug: false
                         },
-                        quests: []
+                        quests: [],
+                        world: {
+                            locations: [],
+                            lore: [],
+                            clock: {
+                                enabled: false,
+                                currentTime: '',
+                                format: 'custom',
+                                notes: ''
+                            }
+                        }
                     };
                 }
             } else {
@@ -165,7 +205,17 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                         notes: '',
                         showDebug: false
                     },
-                    quests: []
+                    quests: [],
+                    world: {
+                        locations: [],
+                        lore: [],
+                        clock: {
+                            enabled: false,
+                            currentTime: '',
+                            format: 'custom',
+                            notes: ''
+                        }
+                    }
                 };
             }
         }
@@ -184,7 +234,17 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 notes: '',
                 showDebug: false
             },
-            quests: []
+            quests: [],
+            world: {
+                locations: [],
+                lore: [],
+                clock: {
+                    enabled: false,
+                    currentTime: '',
+                    format: 'custom',
+                    notes: ''
+                }
+            }
         };
         
         return {
@@ -223,7 +283,17 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 notes: '',
                 showDebug: false
             },
-            quests: data.quests || []
+            quests: data.quests || [],
+            world: data.world || {
+                locations: [],
+                lore: [],
+                clock: {
+                    enabled: false,
+                    currentTime: '',
+                    format: 'custom',
+                    notes: ''
+                }
+            }
         };
     }
 
@@ -389,6 +459,42 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
                 .join(', ');
             const questInfo = `[PARTY TRACKER - QUESTS: Steer the conversation toward ${questGoals}]`;
             directionsParts.push(questInfo);
+        }
+        
+        // Search for location mentions in the user's message
+        const mentionedLocations: Location[] = [];
+        
+        for (const location of this.partyData.world.locations) {
+            // Skip inactive locations
+            if (!location.isActive) continue;
+            
+            // Skip empty names
+            if (!location.name.trim()) continue;
+            
+            // Check if location name is mentioned
+            if (messageLower.includes(location.name.toLowerCase())) {
+                mentionedLocations.push(location);
+            }
+        }
+        
+        // If locations were mentioned, inject their info
+        if (mentionedLocations.length > 0) {
+            const locationInfos = mentionedLocations.map(location => {
+                let info = `[PARTY TRACKER - LOCATION: ${location.name}`;
+                if (location.description.trim()) {
+                    info += ` - ${location.description}`;
+                }
+                info += `]`;
+                return info;
+            });
+            
+            directionsParts.push(...locationInfos);
+        }
+        
+        // Inject clock/time if enabled
+        if (this.partyData.world.clock.enabled && this.partyData.world.clock.currentTime.trim()) {
+            const clockInfo = `[PARTY TRACKER - TIME: {{char}} will always include the current time of day in this format; "${this.partyData.world.clock.currentTime}" at the top of every message, progressing time naturally as the conversation unfolds]`;
+            directionsParts.push(clockInfo);
         }
         
         // Combine all directions
