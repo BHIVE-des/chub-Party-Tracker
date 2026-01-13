@@ -379,10 +379,20 @@ export function WorldTab({
                         key={location.id}
                         style={{
                             backgroundColor: '#1a1a1a',
-                            border: '1px solid #444',
+                            border: location.isActive ? '2px solid #4a7a4a' : '1px solid #444',
                             borderRadius: '4px',
                             padding: '10px',
-                            marginBottom: '8px'
+                            marginBottom: '8px',
+                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)';
+                            e.currentTarget.style.transform = 'translateY(0)';
                         }}
                     >
                         {/* Header Row */}
@@ -427,17 +437,23 @@ export function WorldTab({
                                 title={location.isActive ? "Location is active (will inject when mentioned)" : "Location is inactive (will NOT inject)"}
                                 style={{
                                     backgroundColor: 'transparent',
-                                    color: location.isActive ? '#ffd700' : '#555',
+                                    color: location.isActive ? '#4CAF50' : '#888',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    fontSize: '18px',
+                                    fontSize: '20px',
                                     padding: '2px 6px',
-                                    transition: 'transform 0.1s'
+                                    transition: 'all 0.2s ease'
                                 }}
-                                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
-                                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1.15)';
+                                    e.currentTarget.style.filter = 'brightness(1.2)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.filter = 'brightness(1)';
+                                }}
                             >
-                                {location.isActive ? '⭐' : '☆'}
+                                {location.isActive ? '✅' : '❌'}
                             </button>
                             <button
                                 onClick={() => removeLocation(location.id)}
@@ -448,10 +464,17 @@ export function WorldTab({
                                     borderRadius: '4px',
                                     padding: '4px 10px',
                                     cursor: 'pointer',
-                                    fontSize: '11px'
+                                    fontSize: '11px',
+                                    transition: 'all 0.2s ease'
                                 }}
-                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#753535'}
-                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#5a2a2a'}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#8a3a3a';
+                                    e.currentTarget.style.transform = 'scale(1.05)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                }}
                             >
                                 Delete
                             </button>
@@ -619,7 +642,17 @@ export function WorldTab({
                             border: '1px solid #444',
                             borderRadius: '4px',
                             padding: '10px',
-                            marginBottom: '8px'
+                            marginBottom: '8px',
+                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)';
+                            e.currentTarget.style.transform = 'translateY(0)';
                         }}
                     >
                         {/* Header Row */}
@@ -667,10 +700,17 @@ export function WorldTab({
                                     borderRadius: '4px',
                                     padding: '4px 10px',
                                     cursor: 'pointer',
-                                    fontSize: '11px'
+                                    fontSize: '11px',
+                                    transition: 'all 0.2s ease'
                                 }}
-                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#753535'}
-                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#5a2a2a'}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#8a3a3a';
+                                    e.currentTarget.style.transform = 'scale(1.05)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                }}
                             >
                                 Delete
                             </button>

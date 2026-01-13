@@ -126,6 +126,16 @@ export function QuestsTab({
         return `[PARTY TRACKER - QUESTS: Steer the conversation toward ${quest.nextGoal.trim()}]`;
     };
 
+    // Get status badge styling
+    const getStatusBadgeStyle = (status: 'active' | 'complete' | 'failed') => {
+        const styles = {
+            active: { bg: '#2a5a2a', color: '#4CAF50', icon: '🟢', label: 'Active' },
+            complete: { bg: '#2a3a5a', color: '#64B5F6', icon: '🔵', label: 'Complete' },
+            failed: { bg: '#5a2a2a', color: '#EF5350', icon: '🔴', label: 'Failed' }
+        };
+        return styles[status];
+    };
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {/* Action Bar - Add + Sort */}
@@ -184,14 +194,26 @@ export function QuestsTab({
             )}
 
             {/* Quest Cards */}
-            {sortedQuests.map(quest => (
+            {sortedQuests.map(quest => {
+                const statusBadge = getStatusBadgeStyle(quest.status);
+                return (
                 <div
                     key={quest.id}
                     style={{
                         backgroundColor: '#252525',
-                        border: '1px solid #333',
+                        border: quest.isActive ? '2px solid #4a7a4a' : '1px solid #333',
                         borderRadius: '6px',
-                        padding: '12px'
+                        padding: '12px',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                        transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)';
+                        e.currentTarget.style.transform = 'translateY(0)';
                     }}
                 >
                     {/* Header Row */}
@@ -231,39 +253,68 @@ export function QuestsTab({
                                 fontWeight: 600
                             }}
                         />
+                        {/* Status Badge */}
+                        <div style={{
+                        backgroundColor: statusBadge.bg,
+                        color: statusBadge.color,
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        border: `1px solid ${statusBadge.color}30`
+                        }}>
+                        <span>{statusBadge.icon}</span>
+                            <span>{statusBadge.label}</span>
+                        </div>
                         <button
-                            onClick={() => toggleQuestActive(quest.id)}
-                            title={quest.isActive ? "Quest is active (will steer narrative)" : "Quest is inactive (will NOT steer narrative)"}
-                            style={{
-                                backgroundColor: 'transparent',
-                                color: quest.isActive ? '#ffd700' : '#555',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: '20px',
-                                padding: '4px 8px',
-                                transition: 'transform 0.1s'
-                            }}
-                            onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
-                            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                        >
-                            {quest.isActive ? '⭐' : '☆'}
-                        </button>
+                                onClick={() => toggleQuestActive(quest.id)}
+                                title={quest.isActive ? "Quest is active (will steer narrative)" : "Quest is inactive (will NOT steer narrative)"}
+                                style={{
+                                    backgroundColor: 'transparent',
+                                    color: quest.isActive ? '#4CAF50' : '#888',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '22px',
+                                    padding: '4px 8px',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1.15)';
+                                    e.currentTarget.style.filter = 'brightness(1.2)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.filter = 'brightness(1)';
+                                }}
+                            >
+                                {quest.isActive ? '✅' : '❌'}
+                            </button>
                         <button
-                            onClick={() => removeQuest(quest.id)}
-                            style={{
-                                backgroundColor: '#5a2a2a',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '6px 12px',
-                                cursor: 'pointer',
-                                fontSize: '12px'
+                        onClick={() => removeQuest(quest.id)}
+                        style={{
+                        backgroundColor: '#5a2a2a',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseOver={(e) => {
+                                e.currentTarget.style.backgroundColor = '#8a3a3a';
+                            e.currentTarget.style.transform = 'scale(1.05)';
                             }}
-                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#753535'}
-                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#5a2a2a'}
-                        >
-                            Delete
-                        </button>
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                }}
+                            >
+                                Delete
+                            </button>
                     </div>
 
                     {/* Expanded Content */}
@@ -574,9 +625,10 @@ export function QuestsTab({
                                 )}
                             </div>
                         </div>
-                    )}
+                    )}  
                 </div>
-            ))}
+            );
+            })}
         </div>
     );
 }

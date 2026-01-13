@@ -308,9 +308,20 @@ export function PartyTab({
                         key={member.id}
                         style={{
                             backgroundColor: '#252525',
-                            border: '1px solid #333',
+                            border: member.isActive ? '2px solid #4a7a4a' : '1px solid #333',
                             borderRadius: '6px',
-                            padding: '12px'
+                            padding: '12px',
+                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                            transition: 'all 0.2s ease',
+                            cursor: 'default'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)';
+                            e.currentTarget.style.transform = 'translateY(0)';
                         }}
                     >
                         {/* Header Row - Name & Collapse Toggle */}
@@ -387,17 +398,23 @@ export function PartyTab({
                                 title={member.isActive ? "Character is active (will be injected when mentioned)" : "Character is inactive (will NOT be injected)"}
                                 style={{
                                     backgroundColor: 'transparent',
-                                    color: member.isActive ? '#ffd700' : '#555',
+                                    color: member.isActive ? '#4CAF50' : '#888',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    fontSize: '20px',
+                                    fontSize: '22px',
                                     padding: '4px 8px',
-                                    transition: 'transform 0.1s'
+                                    transition: 'all 0.2s ease'
                                 }}
-                                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
-                                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1.15)';
+                                    e.currentTarget.style.filter = 'brightness(1.2)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                    e.currentTarget.style.filter = 'brightness(1)';
+                                }}
                             >
-                                {member.isActive ? '⭐' : '☆'}
+                                {member.isActive ? '✅' : '❌'}
                             </button>
                             <button
                                 onClick={() => removeMember(member.id)}
@@ -408,10 +425,17 @@ export function PartyTab({
                                     borderRadius: '4px',
                                     padding: '6px 12px',
                                     cursor: 'pointer',
-                                    fontSize: '12px'
+                                    fontSize: '12px',
+                                    transition: 'all 0.2s ease'
                                 }}
-                                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#753535'}
-                                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#5a2a2a'}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#8a3a3a';
+                                    e.currentTarget.style.transform = 'scale(1.05)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
+                                    e.currentTarget.style.transform = 'scale(1)';
+                                }}
                             >
                                 Delete
                             </button>
