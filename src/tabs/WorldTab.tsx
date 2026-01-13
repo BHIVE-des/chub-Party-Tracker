@@ -1,4 +1,4 @@
-import { ReactElement } from "react";
+import { ReactElement, useState, useMemo } from "react";
 import { Location, LoreEntry, ClockState, WorldData } from "../Stage";
 
 interface WorldTabProps {
@@ -16,6 +16,50 @@ export function WorldTab({
     copyToClipboard,
     generateId
 }: WorldTabProps): ReactElement {
+
+    // Sorting state
+    const [locationSortOrder, setLocationSortOrder] = useState<'default' | 'name-asc' | 'name-desc'>('default');
+    const [loreSortOrder, setLoreSortOrder] = useState<'default' | 'title-asc' | 'title-desc'>('default');
+
+    // Sort locations
+    const sortedLocations = useMemo(() => {
+        if (locationSortOrder === 'default') {
+            return world.locations;
+        }
+        
+        const sorted = [...world.locations].sort((a, b) => {
+            const nameA = a.name.toLowerCase().trim() || 'zzz';
+            const nameB = b.name.toLowerCase().trim() || 'zzz';
+            
+            if (locationSortOrder === 'name-asc') {
+                return nameA.localeCompare(nameB);
+            } else {
+                return nameB.localeCompare(nameA);
+            }
+        });
+        
+        return sorted;
+    }, [world.locations, locationSortOrder]);
+
+    // Sort lore entries
+    const sortedLore = useMemo(() => {
+        if (loreSortOrder === 'default') {
+            return world.lore;
+        }
+        
+        const sorted = [...world.lore].sort((a, b) => {
+            const titleA = a.title.toLowerCase().trim() || 'zzz';
+            const titleB = b.title.toLowerCase().trim() || 'zzz';
+            
+            if (loreSortOrder === 'title-asc') {
+                return titleA.localeCompare(titleB);
+            } else {
+                return titleB.localeCompare(titleA);
+            }
+        });
+        
+        return sorted;
+    }, [world.lore, loreSortOrder]);
 
     // === LOCATION FUNCTIONS ===
     
@@ -278,24 +322,45 @@ export function WorldTab({
                     📍 Known Locations
                 </div>
 
-                <button
-                    onClick={addLocation}
-                    style={{
-                        width: '100%',
-                        padding: '10px',
-                        backgroundColor: '#2a5a2a',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        marginBottom: '12px'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
-                >
-                    + Add Location
-                </button>
+                {/* Action Bar - Add + Sort */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    <button
+                        onClick={addLocation}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            backgroundColor: '#2a5a2a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
+                    >
+                        + Add Location
+                    </button>
+                    
+                    <select
+                        value={locationSortOrder}
+                        onChange={(e) => setLocationSortOrder(e.target.value as 'default' | 'name-asc' | 'name-desc')}
+                        style={{
+                            padding: '10px',
+                            backgroundColor: '#2a3a5a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            minWidth: '120px'
+                        }}
+                    >
+                        <option value="default">⚡ Added</option>
+                        <option value="name-asc">🔤 A→Z</option>
+                        <option value="name-desc">🔤 Z→A</option>
+                    </select>
+                </div>
 
                 {world.locations.length === 0 && (
                     <div style={{
@@ -309,7 +374,7 @@ export function WorldTab({
                     </div>
                 )}
 
-                {world.locations.map(location => (
+                {sortedLocations.map(location => (
                     <div
                         key={location.id}
                         style={{
@@ -494,24 +559,45 @@ export function WorldTab({
                     Personal worldbuilding notes - NOT injected into AI
                 </div>
 
-                <button
-                    onClick={addLoreEntry}
-                    style={{
-                        width: '100%',
-                        padding: '10px',
-                        backgroundColor: '#2a3a5a',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        marginBottom: '12px'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#354a75'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a3a5a'}
-                >
-                    + Add Lore Entry
-                </button>
+                {/* Action Bar - Add + Sort */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    <button
+                        onClick={addLoreEntry}
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            backgroundColor: '#2a3a5a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#354a75'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a3a5a'}
+                    >
+                        + Add Lore Entry
+                    </button>
+                    
+                    <select
+                        value={loreSortOrder}
+                        onChange={(e) => setLoreSortOrder(e.target.value as 'default' | 'title-asc' | 'title-desc')}
+                        style={{
+                            padding: '10px',
+                            backgroundColor: '#2a3a5a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            minWidth: '120px'
+                        }}
+                    >
+                        <option value="default">⚡ Added</option>
+                        <option value="title-asc">🔤 A→Z</option>
+                        <option value="title-desc">🔤 Z→A</option>
+                    </select>
+                </div>
 
                 {world.lore.length === 0 && (
                     <div style={{
@@ -525,7 +611,7 @@ export function WorldTab({
                     </div>
                 )}
 
-                {world.lore.map(entry => (
+                {sortedLore.map(entry => (
                     <div
                         key={entry.id}
                         style={{

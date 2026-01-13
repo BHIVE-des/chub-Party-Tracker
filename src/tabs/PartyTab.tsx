@@ -1,4 +1,4 @@
-import { ReactElement, useState } from "react";
+import { ReactElement, useState, useMemo } from "react";
 import { PartyMember, StatEntry, CustomField, Condition } from "../Stage";
 
 interface PartyTabProps {
@@ -23,6 +23,29 @@ export function PartyTab({
     
     // State for full-size image modal
     const [fullSizeImage, setFullSizeImage] = useState<string | null>(null);
+    
+    // State for sorting
+    const [sortOrder, setSortOrder] = useState<'default' | 'name-asc' | 'name-desc'>('default');
+    
+    // Sort members based on sort order
+    const sortedMembers = useMemo(() => {
+        if (sortOrder === 'default') {
+            return members;
+        }
+        
+        const sorted = [...members].sort((a, b) => {
+            const nameA = a.name.toLowerCase().trim() || 'zzz'; // Push empty names to end
+            const nameB = b.name.toLowerCase().trim() || 'zzz';
+            
+            if (sortOrder === 'name-asc') {
+                return nameA.localeCompare(nameB);
+            } else {
+                return nameB.localeCompare(nameA);
+            }
+        });
+        
+        return sorted;
+    }, [members, sortOrder]);
 
     // Toggle collapse state
     const toggleCollapse = (id: string) => {
@@ -226,24 +249,47 @@ export function PartyTab({
     return (
         <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button
-                    onClick={addMember}
-                    style={{
-                        width: '100%',
-                        padding: '12px',
-                        backgroundColor: '#2a5a2a',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        fontWeight: 500
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
-                >
-                    + Add Party Member
-                </button>
+                {/* Action Bar - Add Member + Sort */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button
+                        onClick={addMember}
+                        style={{
+                            flex: 1,
+                            padding: '12px',
+                            backgroundColor: '#2a5a2a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 500
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
+                    >
+                        + Add Party Member
+                    </button>
+                    
+                    <select
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(e.target.value as 'default' | 'name-asc' | 'name-desc')}
+                        style={{
+                            padding: '12px',
+                            backgroundColor: '#2a3a5a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            minWidth: '140px'
+                        }}
+                    >
+                        <option value="default">⚡ Order Added</option>
+                        <option value="name-asc">🔤 Name (A→Z)</option>
+                        <option value="name-desc">🔤 Name (Z→A)</option>
+                    </select>
+                </div>
 
                 {members.length === 0 && (
                     <div style={{ 
@@ -257,7 +303,7 @@ export function PartyTab({
                 )}
 
                 {/* Party Members */}
-                {members.map(member => (
+                {sortedMembers.map(member => (
                     <div
                         key={member.id}
                         style={{

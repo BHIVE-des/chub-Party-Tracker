@@ -1,4 +1,4 @@
-import { ReactElement } from "react";
+import { ReactElement, useState, useMemo } from "react";
 import { Quest, Objective } from "../Stage";
 
 interface QuestsTabProps {
@@ -20,6 +20,41 @@ export function QuestsTab({
     copyToClipboard,
     generateId
 }: QuestsTabProps): ReactElement {
+
+    // Sorting state
+    const [sortOrder, setSortOrder] = useState<'default' | 'name-asc' | 'name-desc' | 'status-active' | 'status-complete'>('default');
+
+    // Sort quests
+    const sortedQuests = useMemo(() => {
+        if (sortOrder === 'default') {
+            return quests;
+        }
+        
+        const sorted = [...quests].sort((a, b) => {
+            if (sortOrder === 'name-asc' || sortOrder === 'name-desc') {
+                const nameA = a.name.toLowerCase().trim() || 'zzz';
+                const nameB = b.name.toLowerCase().trim() || 'zzz';
+                return sortOrder === 'name-asc' 
+                    ? nameA.localeCompare(nameB)
+                    : nameB.localeCompare(nameA);
+            }
+            
+            // Sort by status
+            const statusOrder = {
+                'active': 1,
+                'complete': 2,
+                'failed': 3
+            };
+            
+            if (sortOrder === 'status-active') {
+                return statusOrder[a.status] - statusOrder[b.status];
+            } else { // status-complete
+                return statusOrder[b.status] - statusOrder[a.status];
+            }
+        });
+        
+        return sorted;
+    }, [quests, sortOrder]);
 
     // Toggle quest collapse
     const toggleQuestCollapse = (id: string) => {
@@ -93,24 +128,49 @@ export function QuestsTab({
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button
-                onClick={addQuest}
-                style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: '#2a5a2a',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 500
-                }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
-            >
-                + Add Quest
-            </button>
+            {/* Action Bar - Add + Sort */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                    onClick={addQuest}
+                    style={{
+                        flex: 1,
+                        padding: '12px',
+                        backgroundColor: '#2a5a2a',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 500
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#357535'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2a5a2a'}
+                >
+                    + Add Quest
+                </button>
+                
+                <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as any)}
+                    style={{
+                        padding: '12px',
+                        backgroundColor: '#2a3a5a',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        minWidth: '140px'
+                    }}
+                >
+                    <option value="default">⚡ Added</option>
+                    <option value="name-asc">🔤 Name (A→Z)</option>
+                    <option value="name-desc">🔤 Name (Z→A)</option>
+                    <option value="status-active">🏁 Active First</option>
+                    <option value="status-complete">✅ Complete First</option>
+                </select>
+            </div>
 
             {quests.length === 0 && (
                 <div style={{ 
@@ -124,7 +184,7 @@ export function QuestsTab({
             )}
 
             {/* Quest Cards */}
-            {quests.map(quest => (
+            {sortedQuests.map(quest => (
                 <div
                     key={quest.id}
                     style={{
