@@ -1,5 +1,7 @@
 import { ReactElement, useState, useMemo } from "react";
 import { Location, LoreEntry, ClockState, WorldData } from "../Stage";
+import { buildLocationInjection, buildClockInjection } from "../injection";
+import { DeleteButton } from "./DeleteButton";
 
 interface WorldTabProps {
     world: WorldData;
@@ -98,14 +100,7 @@ export function WorldTab({
         }
     };
 
-    const getLocationInjectionPreview = (location: Location): string => {
-        let info = `[PARTY TRACKER - LOCATION: ${location.name}`;
-        if (location.description.trim()) {
-            info += ` - ${location.description}`;
-        }
-        info += `]`;
-        return info;
-    };
+    const getLocationInjectionPreview = (location: Location): string => buildLocationInjection(location);
 
     // === LORE FUNCTIONS ===
 
@@ -143,12 +138,8 @@ export function WorldTab({
         updateWorld('clock', { ...world.clock, [field]: value });
     };
 
-    const getClockInjectionPreview = (): string => {
-        if (!world.clock.enabled || !world.clock.currentTime.trim()) {
-            return '[Clock disabled - no time injection]';
-        }
-        return `[PARTY TRACKER - TIME: {{char}} will always include the current time of day in this format; "${world.clock.currentTime}" at the top of every message, progressing time naturally as the conversation unfolds]`;
-    };
+    const getClockInjectionPreview = (): string =>
+        buildClockInjection(world.clock) ?? '[Clock disabled - no time injection]';
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -455,29 +446,7 @@ export function WorldTab({
                             >
                                 {location.isActive ? '✅' : '❌'}
                             </button>
-                            <button
-                                onClick={() => removeLocation(location.id)}
-                                style={{
-                                    backgroundColor: '#5a2a2a',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '4px 10px',
-                                    cursor: 'pointer',
-                                    fontSize: '11px',
-                                    transition: 'all 0.2s ease'
-                                }}
-                                onMouseOver={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#8a3a3a';
-                                    e.currentTarget.style.transform = 'scale(1.05)';
-                                }}
-                                onMouseOut={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
-                                    e.currentTarget.style.transform = 'scale(1)';
-                                }}
-                            >
-                                Delete
-                            </button>
+                            <DeleteButton small onConfirm={() => removeLocation(location.id)} />
                         </div>
 
                         {/* Expanded Content */}
@@ -691,29 +660,7 @@ export function WorldTab({
                                     fontWeight: 600
                                 }}
                             />
-                            <button
-                                onClick={() => removeLoreEntry(entry.id)}
-                                style={{
-                                    backgroundColor: '#5a2a2a',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '4px 10px',
-                                    cursor: 'pointer',
-                                    fontSize: '11px',
-                                    transition: 'all 0.2s ease'
-                                }}
-                                onMouseOver={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#8a3a3a';
-                                    e.currentTarget.style.transform = 'scale(1.05)';
-                                }}
-                                onMouseOut={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
-                                    e.currentTarget.style.transform = 'scale(1)';
-                                }}
-                            >
-                                Delete
-                            </button>
+                            <DeleteButton small onConfirm={() => removeLoreEntry(entry.id)} />
                         </div>
 
                         {/* Expanded Content */}

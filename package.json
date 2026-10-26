@@ -18,24 +18,25 @@
   },
   "dependencies": {
     "@chub-ai/stages-ts": "^0.3.7",
-    "@typescript-eslint/parser": "^7.4.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "vite-plugin-dts": "^3.9.1"
+    "react-dom": "^18.2.0"
   },
   "engines": {
-    "node": "21.7.1"
+    "node": ">=20"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
     "@vitejs/plugin-react": "^4.2.1",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
     "sass": "^1.72.0",
     "typescript": "^5.2.2",
-    "vite": "^5.2.0"
+    "vite": "^5.2.0",
+    "vite-plugin-dts": "^3.9.1"
   },
   "exports": {
     ".": {

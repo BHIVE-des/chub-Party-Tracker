@@ -2,6 +2,10 @@ import {ReactElement} from "react";
 import {StageBase, StageResponse, InitialData, Message} from "@chub-ai/stages-ts";
 import {LoadResponse} from "@chub-ai/stages-ts/dist/types/load";
 import {PartyTrackerUI} from "./PartyTrackerUI";
+import {
+    hasUserInfo, buildUserInjection, isMemberMentioned, buildMemberInjection,
+    buildQuestsInjection, isLocationMentioned, buildLocationInjection, buildClockInjection
+} from "./injection";
 
 /***
  TypeScript Interfaces for Party Tracker
@@ -105,7 +109,97 @@ export interface PartyData {
 }
 
 /***
+ Fresh, empty tracker data
+ ***/
+export function emptyPartyData(): PartyData {
+    return {
+        members: [],
+        userCharacter: {
+            name: '',
+            description: '',
+            class: '',
+            stats: [],
+            inventory: [],
+            notes: '',
+            showDebug: false
+        },
+        quests: [],
+        world: {
+            locations: [],
+            lore: [],
+            clock: {
+                enabled: false,
+                currentTime: '',
+                format: 'custom',
+                notes: ''
+            }
+        }
+    };
+}
+
+const generateFallbackId = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+const arrayOr = <T,>(value: any): T[] => Array.isArray(value) ? value : [];
+
+// Old saves used a single 'value' field instead of current/max
+const normalizeStats = (stats: any): StatEntry[] => arrayOr<any>(stats).map(stat => ({
+    label: stat?.label || '',
+    currentValue: stat?.currentValue ?? stat?.value ?? '',
+    maxValue: stat?.maxValue || ''
+}));
+
+/***
+ Migrate saved or imported data into the current PartyData shape,
+ filling in anything missing from older versions or hand-edited JSON.
+ ***/
+export function normalizePartyData(data: any): PartyData {
+    const empty = emptyPartyData();
+    if (!data || typeof data !== 'object') return empty;
+
+    return {
+        members: arrayOr<any>(data.members).map(member => ({
+            id: member.id || generateFallbackId(),
+            name: member.name || '',
+            tags: member.tags || '',
+            description: member.description || '',
+            customFields: arrayOr<CustomField>(member.customFields),
+            conditions: arrayOr<Condition>(member.conditions),
+            stats: normalizeStats(member.stats),
+            secrets: member.secrets || '',
+            images: arrayOr<string>(member.images),
+            isActive: member.isActive ?? true,
+            isCollapsed: member.isCollapsed ?? false,
+            showDebug: member.showDebug ?? false,
+            showSecrets: member.showSecrets ?? false
+        })),
+        userCharacter: {
+            ...empty.userCharacter,
+            ...(data.userCharacter || {}),
+            stats: normalizeStats(data.userCharacter?.stats),
+            inventory: arrayOr<string>(data.userCharacter?.inventory)
+        },
+        quests: arrayOr<any>(data.quests).map(quest => ({
+            id: quest.id || generateFallbackId(),
+            name: quest.name || '',
+            nextGoal: quest.nextGoal || '',
+            objectives: arrayOr<Objective>(quest.objectives),
+            notes: quest.notes || '',
+            status: quest.status || 'active',
+            isActive: quest.isActive ?? true,
+            isCollapsed: quest.isCollapsed ?? false,
+            showDebug: quest.showDebug ?? false
+        })),
+        world: {
+            locations: arrayOr<Location>(data.world?.locations),
+            lore: arrayOr<LoreEntry>(data.world?.lore),
+            clock: { ...empty.world.clock, ...(data.world?.clock || {}) }
+        }
+    };
+}
+
+/***
  The type that this stage persists message-level state in.
+ Still written every message so chats from older versions keep loading.
  ***/
 type MessageStateType = PartyData;
 
@@ -121,180 +215,40 @@ type InitStateType = any;
 
 /***
  The type that this stage persists dynamic chat-level state in.
+ This is the source of truth: scoped to the chat and saved as soon as it's edited.
  ***/
-type ChatStateType = any;
+type ChatStateType = PartyData;
+
+// How long to wait after the last edit before saving to chub
+const SAVE_DELAY_MS = 500;
 
 /***
  Party Tracker Stage - A flexible character/party management system
  ***/
 export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
-    
+
     // Internal party data
     private partyData: PartyData;
-    
+
     // Callback to trigger UI updates
     private updateUICallback?: () => void;
-    
-    // Get unique chat ID from URL
-    private getChatId(): string | null {
-        const match = window.location.pathname.match(/\/chats\/(\d+)/);
-        return match ? match[1] : null;
-    }
-    
-    // Get storage key scoped to current chat
-    private getStorageKey(): string {
-        const chatId = this.getChatId();
-        return chatId ? `party-tracker-data-chat-${chatId}` : 'party-tracker-data-global';
-    }
+
+    // Pending debounced save to chat state
+    private saveTimer?: ReturnType<typeof setTimeout>;
 
     constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
         super(data);
-        
-        // Log chat ID for debugging
-        const chatId = this.getChatId();
-        console.log('[Party Tracker] Loaded in chat:', chatId || 'unknown (using global storage)');
-        
-        // Initialize party data from messageState or localStorage
-        const { messageState } = data;
-        
-        if (messageState && messageState.members) {
-            // Use messageState from the chat (most authoritative)
-            this.partyData = this.migrateOldFormat(messageState);
-        } else {
-            // Try localStorage as fallback (scoped to this chat)
-            const saved = localStorage.getItem(this.getStorageKey());
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    this.partyData = this.migrateOldFormat(parsed);
-                } catch (e) {
-                    console.error('[Party Tracker] Failed to parse saved party data:', e);
-                    this.partyData = { 
-                        members: [],
-                        userCharacter: {
-                            name: '',
-                            description: '',
-                            class: '',
-                            stats: [],
-                            inventory: [],
-                            notes: '',
-                            showDebug: false
-                        },
-                        quests: [],
-                        world: {
-                            locations: [],
-                            lore: [],
-                            clock: {
-                                enabled: false,
-                                currentTime: '',
-                                format: 'custom',
-                                notes: ''
-                            }
-                        }
-                    };
-                }
-            } else {
-                this.partyData = { 
-                    members: [],
-                    userCharacter: {
-                        name: '',
-                        description: '',
-                        class: '',
-                        stats: [],
-                        inventory: [],
-                        notes: '',
-                        showDebug: false
-                    },
-                    quests: [],
-                    world: {
-                        locations: [],
-                        lore: [],
-                        clock: {
-                            enabled: false,
-                            currentTime: '',
-                            format: 'custom',
-                            notes: ''
-                        }
-                    }
-                };
-            }
-        }
-    }
 
-    // Migrate old single-value format to current/max format
-    private migrateOldFormat(data: any): PartyData {
-        if (!data || !data.members) return { 
-            members: [],
-            userCharacter: {
-                name: '',
-                description: '',
-                class: '',
-                stats: [],
-                inventory: [],
-                notes: '',
-                showDebug: false
-            },
-            quests: [],
-            world: {
-                locations: [],
-                lore: [],
-                clock: {
-                    enabled: false,
-                    currentTime: '',
-                    format: 'custom',
-                    notes: ''
-                }
-            }
-        };
-        
-        return {
-            members: data.members.map((member: any) => ({
-                ...member,
-                customFields: member.customFields || [],  // Add customFields if missing
-                conditions: member.conditions || [],      // Add conditions if missing
-                secrets: member.secrets || '',            // Add secrets if missing
-                images: member.images || [],              // Add images if missing
-                isActive: member.isActive !== undefined ? member.isActive : true, // Add isActive if missing (default true)
-                showDebug: member.showDebug !== undefined ? member.showDebug : false, // Add showDebug if missing
-                showSecrets: member.showSecrets !== undefined ? member.showSecrets : false, // Add showSecrets if missing
-                stats: member.stats?.map((stat: any) => {
-                    // If it has the old 'value' field, migrate it
-                    if ('value' in stat && !('currentValue' in stat)) {
-                        return {
-                            label: stat.label || '',
-                            currentValue: stat.value || '',
-                            maxValue: ''
-                        };
-                    }
-                    // Already in new format or handle missing fields
-                    return {
-                        label: stat.label || '',
-                        currentValue: stat.currentValue || '',
-                        maxValue: stat.maxValue || ''
-                    };
-                }) || []
-            })),
-            userCharacter: data.userCharacter || {
-                name: '',
-                description: '',
-                class: '',
-                stats: [],
-                inventory: [],
-                notes: '',
-                showDebug: false
-            },
-            quests: data.quests || [],
-            world: data.world || {
-                locations: [],
-                lore: [],
-                clock: {
-                    enabled: false,
-                    currentTime: '',
-                    format: 'custom',
-                    notes: ''
-                }
-            }
-        };
+        const { chatState, messageState } = data;
+
+        // Chat state is authoritative; chats from older versions only have message state
+        if (chatState && chatState.members) {
+            this.partyData = normalizePartyData(chatState);
+        } else if (messageState && messageState.members) {
+            this.partyData = normalizePartyData(messageState);
+        } else {
+            this.partyData = emptyPartyData();
+        }
     }
 
     async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
@@ -302,224 +256,61 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
             success: true,
             error: null,
             initState: null,
-            chatState: null,
+            chatState: this.partyData,
         };
     }
 
-    async setState(state: MessageStateType): Promise<void> {
-        // Handle state updates from swipes/jumps
-        if (state && state.members) {
-            this.partyData = state;
-            // Persist to localStorage (scoped to this chat)
-            try {
-                localStorage.setItem(this.getStorageKey(), JSON.stringify(this.partyData));
-            } catch (e) {
-                console.error('[Party Tracker] Failed to save to localStorage:', e);
-            }
-            // Trigger UI update if callback is set
-            if (this.updateUICallback) {
-                this.updateUICallback();
-            }
-        }
+    async setState(_state: MessageStateType): Promise<void> {
+        // Tracker data is chat-level and only changes through the UI, so swipes and
+        // jumps intentionally don't roll it back (that used to discard unsent edits).
     }
 
     async beforePrompt(userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
         const { content } = userMessage;
-        
-        // Build stage directions
-        let stageDirections: string | null = null;
+        const { userCharacter, members, quests, world } = this.partyData;
         const directionsParts: string[] = [];
-        
-        // Inject User Character info (always included if data exists)
-        const user = this.partyData.userCharacter;
-        if (user.name.trim() || user.description.trim() || user.class.trim() || user.stats.length > 0 || user.inventory.length > 0) {
-            let userInfo = `[PARTY TRACKER - USER`;
-            if (user.name.trim()) {
-                userInfo += `: ${user.name}`;
-            }
-            if (user.class.trim()) {
-                userInfo += ` (${user.class})`;
-            }
-            if (user.description.trim()) {
-                userInfo += ` - ${user.description}`;
-            }
-            if (user.inventory.length > 0) {
-                const inventoryStr = user.inventory.filter(i => i.trim()).join(', ');
-                if (inventoryStr) {
-                    userInfo += `. Inventory: ${inventoryStr}`;
-                }
-            }
-            if (user.stats.length > 0) {
-                const statsStr = user.stats
-                    .filter(s => s.label.trim() || s.currentValue.trim())
-                    .map(s => {
-                        const value = s.maxValue.trim() 
-                            ? `${s.currentValue}/${s.maxValue}` 
-                            : s.currentValue;
-                        return `${s.label}: ${value}`;
-                    })
-                    .join(', ');
-                if (statsStr) {
-                    userInfo += `. Stats: ${statsStr}`;
-                }
-            }
-            userInfo += `]`;
-            directionsParts.push(userInfo);
+
+        // User Character info (always included if data exists)
+        if (hasUserInfo(userCharacter)) {
+            directionsParts.push(buildUserInjection(userCharacter));
         }
-        
-        // Search for character mentions in the user's message
-        const mentionedCharacters: PartyMember[] = [];
-        const messageLower = content.toLowerCase();
-        
-        for (const member of this.partyData.members) {
-            // Skip inactive characters
-            if (!member.isActive) continue;
-            
-            // Skip empty names
-            if (!member.name.trim()) continue;
-            
-            // Check if name is mentioned
-            if (messageLower.includes(member.name.toLowerCase())) {
-                mentionedCharacters.push(member);
-                continue;
-            }
-            
-            // Check if any tags are mentioned
-            if (member.tags.trim()) {
-                const tags = member.tags.split(',').map(t => t.trim().toLowerCase());
-                for (const tag of tags) {
-                    if (tag && messageLower.includes(tag)) {
-                        mentionedCharacters.push(member);
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // If characters were mentioned, inject their info
-        if (mentionedCharacters.length > 0) {
-            const charInfos = mentionedCharacters.map(member => {
-                let info = `[PARTY TRACKER - PARTY: ${member.name}`;
-                if (member.tags.trim()) {
-                    info += ` (${member.tags})`;
-                }
-                if (member.description.trim()) {
-                    info += ` - ${member.description}`;
-                }
-                // Add secrets with DO NOT SHARE warning
-                if (member.secrets.trim()) {
-                    info += `. ((DO NOT SHARE THIS SECRET: ${member.secrets}))`;
-                }
-                // Add active conditions
-                if (member.conditions && member.conditions.length > 0) {
-                    const activeConditions = member.conditions
-                        .filter(c => c.isActive && c.label.trim())
-                        .map(c => c.label)
-                        .join(', ');
-                    if (activeConditions) {
-                        info += `. Currently: ${activeConditions}`;
-                    }
-                }
-                // Add custom fields
-                if (member.customFields && member.customFields.length > 0) {
-                    const customFieldsText = member.customFields
-                        .filter(f => f.label.trim() && f.content.trim())
-                        .map(f => `${f.label}: ${f.content}`)
-                        .join('. ');
-                    if (customFieldsText) {
-                        info += `. ${customFieldsText}`;
-                    }
-                }
-                if (member.stats.length > 0) {
-                    const statsStr = member.stats
-                        .filter(s => s.label.trim() || s.currentValue.trim())
-                        .map(s => {
-                            const value = s.maxValue.trim() 
-                                ? `${s.currentValue}/${s.maxValue}` 
-                                : s.currentValue;
-                            return `${s.label}: ${value}`;
-                        })
-                        .join(', ');
-                    if (statsStr) {
-                        info += `. Stats: ${statsStr}`;
-                    }
-                }
-                info += `]`;
-                return info;
-            });
-            
-            directionsParts.push(...charInfos);
-        }
-        
-        // Inject active quests (directive-based narrative steering)
-        const activeQuests = this.partyData.quests.filter(q => q.isActive && q.nextGoal.trim());
-        if (activeQuests.length > 0) {
-            const questGoals = activeQuests
-                .map(q => q.nextGoal.trim())
-                .join(', ');
-            const questInfo = `[PARTY TRACKER - QUESTS: Steer the conversation toward ${questGoals}]`;
-            directionsParts.push(questInfo);
-        }
-        
-        // Search for location mentions in the user's message
-        const mentionedLocations: Location[] = [];
-        
-        for (const location of this.partyData.world.locations) {
-            // Skip inactive locations
-            if (!location.isActive) continue;
-            
-            // Skip empty names
-            if (!location.name.trim()) continue;
-            
-            // Check if location name is mentioned
-            if (messageLower.includes(location.name.toLowerCase())) {
-                mentionedLocations.push(location);
-            }
-        }
-        
-        // If locations were mentioned, inject their info
-        if (mentionedLocations.length > 0) {
-            const locationInfos = mentionedLocations.map(location => {
-                let info = `[PARTY TRACKER - LOCATION: ${location.name}`;
-                if (location.description.trim()) {
-                    info += ` - ${location.description}`;
-                }
-                info += `]`;
-                return info;
-            });
-            
-            directionsParts.push(...locationInfos);
-        }
-        
-        // Inject clock/time if enabled
-        if (this.partyData.world.clock.enabled && this.partyData.world.clock.currentTime.trim()) {
-            const clockInfo = `[PARTY TRACKER - TIME: {{char}} will always include the current time of day in this format; "${this.partyData.world.clock.currentTime}" at the top of every message, progressing time naturally as the conversation unfolds]`;
-            directionsParts.push(clockInfo);
-        }
-        
-        // Combine all directions
-        if (directionsParts.length > 0) {
-            stageDirections = directionsParts.join('\n');
-        }
-        
+
+        // Party members mentioned by name or tag
+        directionsParts.push(...members.filter(m => isMemberMentioned(m, content)).map(buildMemberInjection));
+
+        // Active quests (directive-based narrative steering)
+        const questInfo = buildQuestsInjection(quests);
+        if (questInfo) directionsParts.push(questInfo);
+
+        // Locations mentioned by name
+        directionsParts.push(...world.locations.filter(l => isLocationMentioned(l, content)).map(buildLocationInjection));
+
+        // Clock/time if enabled
+        const clockInfo = buildClockInjection(world.clock);
+        if (clockInfo) directionsParts.push(clockInfo);
+
+        // This response saves chat state itself
+        this.cancelPendingSave();
+
         return {
-            stageDirections,
+            stageDirections: directionsParts.length > 0 ? directionsParts.join('\n') : null,
             messageState: this.partyData,
             modifiedMessage: null,
             systemMessage: null,
             error: null,
-            chatState: null,
+            chatState: this.partyData,
         };
     }
 
-    async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    async afterResponse(_botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+        this.cancelPendingSave();
         return {
             stageDirections: null,
             messageState: this.partyData,
             modifiedMessage: null,
             error: null,
             systemMessage: null,
-            chatState: null
+            chatState: this.partyData,
         };
     }
 
@@ -530,12 +321,26 @@ export class Stage extends StageBase<InitStateType, ChatStateType, MessageStateT
 
     updatePartyData(newData: PartyData): void {
         this.partyData = newData;
-        try {
-            const storageKey = this.getStorageKey();
-            localStorage.setItem(storageKey, JSON.stringify(this.partyData));
-            console.log('[Party Tracker] Saved to:', storageKey);
-        } catch (e) {
-            console.error('[Party Tracker] Failed to save to localStorage:', e);
+        this.scheduleSave();
+    }
+
+    // Save to chub's chat state shortly after edits stop, so changes persist without sending a message
+    private scheduleSave(): void {
+        this.cancelPendingSave();
+        this.saveTimer = setTimeout(() => {
+            this.saveTimer = undefined;
+            this.messenger.updateChatState(this.partyData)
+                .then(res => {
+                    if (!res.success) console.error('[Party Tracker] Failed to save chat state:', res.error);
+                })
+                .catch(e => console.error('[Party Tracker] Failed to save chat state:', e));
+        }, SAVE_DELAY_MS);
+    }
+
+    private cancelPendingSave(): void {
+        if (this.saveTimer) {
+            clearTimeout(this.saveTimer);
+            this.saveTimer = undefined;
         }
     }
 

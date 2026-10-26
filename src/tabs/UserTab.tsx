@@ -1,5 +1,6 @@
 import { ReactElement } from "react";
 import { UserCharacter, StatEntry } from "../Stage";
+import { buildUserInjection } from "../injection";
 
 interface UserTabProps {
     userCharacter: UserCharacter;
@@ -45,41 +46,7 @@ export function UserTab({ userCharacter, updateUserCharacter, estimateTokens, co
     };
 
     // Generate injection preview for user character
-    const getUserInjectionPreview = (): string => {
-        const user = userCharacter;
-        let info = `[PARTY TRACKER - USER`;
-        if (user.name.trim()) {
-            info += `: ${user.name}`;
-        }
-        if (user.class.trim()) {
-            info += ` (${user.class})`;
-        }
-        if (user.description.trim()) {
-            info += ` - ${user.description}`;
-        }
-        if (user.inventory.length > 0) {
-            const inventoryStr = user.inventory.filter(i => i.trim()).join(', ');
-            if (inventoryStr) {
-                info += `. Inventory: ${inventoryStr}`;
-            }
-        }
-        if (user.stats.length > 0) {
-            const statsStr = user.stats
-                .filter(s => s.label.trim() || s.currentValue.trim())
-                .map(s => {
-                    const value = s.maxValue.trim() 
-                        ? `${s.currentValue}/${s.maxValue}` 
-                        : s.currentValue;
-                    return `${s.label}: ${value}`;
-                })
-                .join(', ');
-            if (statsStr) {
-                info += `. Stats: ${statsStr}`;
-            }
-        }
-        info += `]`;
-        return info;
-    };
+    const getUserInjectionPreview = (): string => buildUserInjection(userCharacter);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

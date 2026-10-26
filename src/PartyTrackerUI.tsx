@@ -1,5 +1,5 @@
 import {ReactElement, useState, useEffect} from "react";
-import {Stage, PartyMember, UserCharacter, Quest, WorldData} from "./Stage";
+import {Stage, PartyMember, UserCharacter, Quest, WorldData, normalizePartyData} from "./Stage";
 import { UserTab } from "./tabs/UserTab";
 import { PartyTab } from "./tabs/PartyTab";
 import { QuestsTab } from "./tabs/QuestsTab";
@@ -19,6 +19,7 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
     const [showExportModal, setShowExportModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [importText, setImportText] = useState('');
+    const [importError, setImportError] = useState<string | null>(null);
     const [copyFeedback, setCopyFeedback] = useState(false);
     
     useEffect(() => {
@@ -56,26 +57,30 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
 
     // Import party data from JSON text
     const importData = () => {
+        let imported: any;
         try {
-            const imported = JSON.parse(importText);
-            
-            // Validate basic structure
-            if (!imported || typeof imported !== 'object') {
-                return;
-            }
-            
-            if (!Array.isArray(imported.members)) {
-                return;
-            }
-
-            // Import and update
-            stage.updatePartyData(imported);
-            forceUpdate({});
-            setShowImportModal(false);
-            setImportText('');
+            imported = JSON.parse(importText);
         } catch (error) {
-            console.error('Import error:', error);
+            setImportError(`That isn't valid JSON: ${(error as Error).message}`);
+            return;
         }
+
+        // Validate basic structure
+        if (!imported || typeof imported !== 'object' || !Array.isArray(imported.members)) {
+            setImportError('This doesn\'t look like a Party Tracker export (no "members" list found).');
+            return;
+        }
+
+        // Fill in anything missing from older exports, then import
+        stage.updatePartyData(normalizePartyData(imported));
+        forceUpdate({});
+        closeImportModal();
+    };
+
+    const closeImportModal = () => {
+        setShowImportModal(false);
+        setImportText('');
+        setImportError(null);
     };
 
     /***
@@ -579,10 +584,7 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                     justifyContent: 'center',
                     zIndex: 10000
                 }}
-                onClick={() => {
-                    setShowImportModal(false);
-                    setImportText('');
-                }}
+                onClick={closeImportModal}
             >
                 <div
                     style={{
@@ -608,10 +610,7 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                             📤 Import Party Data
                         </h3>
                         <button
-                            onClick={() => {
-                                setShowImportModal(false);
-                                setImportText('');
-                            }}
+                            onClick={closeImportModal}
                             style={{
                                 backgroundColor: 'transparent',
                                 color: '#999',
@@ -633,7 +632,10 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
 
                     <textarea
                         value={importText}
-                        onChange={(e) => setImportText(e.target.value)}
+                        onChange={(e) => {
+                            setImportText(e.target.value);
+                            setImportError(null);
+                        }}
                         placeholder='{\n  "members": [...],\n  "userCharacter": {...}\n}'
                         style={{
                             flex: 1,
@@ -649,6 +651,20 @@ export function PartyTrackerUI({ stage }: { stage: Stage }): ReactElement {
                             minHeight: '300px'
                         }}
                     />
+
+                    {importError && (
+                        <div style={{
+                            backgroundColor: '#3a1f1f',
+                            border: '1px solid #8a3a3a',
+                            borderRadius: '4px',
+                            padding: '8px 12px',
+                            marginBottom: '12px',
+                            fontSize: '13px',
+                            color: '#ff9a9a'
+                        }}>
+                            ⚠️ {importError}
+                        </div>
+                    )}
 
                     <button
                         onClick={importData}

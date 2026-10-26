@@ -1,5 +1,7 @@
 import { ReactElement, useState, useMemo } from "react";
 import { PartyMember, StatEntry, CustomField, Condition } from "../Stage";
+import { buildMemberInjection } from "../injection";
+import { DeleteButton } from "./DeleteButton";
 
 interface PartyTabProps {
     members: PartyMember[];
@@ -196,55 +198,7 @@ export function PartyTab({
     };
 
     // Generate injection preview for a member
-    const getInjectionPreview = (member: PartyMember): string => {
-        let info = `[PARTY TRACKER - PARTY: ${member.name}`;
-        if (member.tags.trim()) {
-            info += ` (${member.tags})`;
-        }
-        if (member.description.trim()) {
-            info += ` - ${member.description}`;
-        }
-        // Add secrets with DO NOT SHARE warning
-        if (member.secrets.trim()) {
-            info += `. ((DO NOT SHARE THIS SECRET: ${member.secrets}))`;
-        }
-        // Add active conditions
-        if (member.conditions && member.conditions.length > 0) {
-            const activeConditions = member.conditions
-                .filter(c => c.isActive && c.label.trim())
-                .map(c => c.label)
-                .join(', ');
-            if (activeConditions) {
-                info += `. Currently: ${activeConditions}`;
-            }
-        }
-        // Add custom fields
-        if (member.customFields && member.customFields.length > 0) {
-            const customFieldsText = member.customFields
-                .filter(f => f.label.trim() && f.content.trim())
-                .map(f => `${f.label}: ${f.content}`)
-                .join('. ');
-            if (customFieldsText) {
-                info += `. ${customFieldsText}`;
-            }
-        }
-        if (member.stats.length > 0) {
-            const statsStr = member.stats
-                .filter(s => s.label.trim() || s.currentValue.trim())
-                .map(s => {
-                    const value = s.maxValue.trim() 
-                        ? `${s.currentValue}/${s.maxValue}` 
-                        : s.currentValue;
-                    return `${s.label}: ${value}`;
-                })
-                .join(', ');
-            if (statsStr) {
-                info += `. Stats: ${statsStr}`;
-            }
-        }
-        info += `]`;
-        return info;
-    };
+    const getInjectionPreview = (member: PartyMember): string => buildMemberInjection(member);
 
     return (
         <>
@@ -416,29 +370,7 @@ export function PartyTab({
                             >
                                 {member.isActive ? '✅' : '❌'}
                             </button>
-                            <button
-                                onClick={() => removeMember(member.id)}
-                                style={{
-                                    backgroundColor: '#5a2a2a',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '6px 12px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    transition: 'all 0.2s ease'
-                                }}
-                                onMouseOver={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#8a3a3a';
-                                    e.currentTarget.style.transform = 'scale(1.05)';
-                                }}
-                                onMouseOut={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
-                                    e.currentTarget.style.transform = 'scale(1)';
-                                }}
-                            >
-                                Delete
-                            </button>
+                            <DeleteButton onConfirm={() => removeMember(member.id)} />
                         </div>
 
                         {/* Expanded Content */}

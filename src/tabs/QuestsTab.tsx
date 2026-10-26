@@ -1,5 +1,7 @@
 import { ReactElement, useState, useMemo } from "react";
 import { Quest, Objective } from "../Stage";
+import { buildQuestsInjection } from "../injection";
+import { DeleteButton } from "./DeleteButton";
 
 interface QuestsTabProps {
     quests: Quest[];
@@ -123,7 +125,9 @@ export function QuestsTab({
     // Generate injection preview for quest
     const getQuestInjectionPreview = (quest: Quest): string => {
         if (!quest.nextGoal.trim()) return '[No directive - quest will not be injected]';
-        return `[PARTY TRACKER - QUESTS: Steer the conversation toward ${quest.nextGoal.trim()}]`;
+        if (!quest.isActive) return '[Quest is toggled off - will not be injected]';
+        if (quest.status !== 'active') return `[Quest is ${quest.status} - will not be injected]`;
+        return buildQuestsInjection([quest]) ?? '';
     };
 
     // Get status badge styling
@@ -292,29 +296,7 @@ export function QuestsTab({
                             >
                                 {quest.isActive ? '✅' : '❌'}
                             </button>
-                        <button
-                        onClick={() => removeQuest(quest.id)}
-                        style={{
-                        backgroundColor: '#5a2a2a',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '6px 12px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                            transition: 'all 0.2s ease'
-                        }}
-                        onMouseOver={(e) => {
-                                e.currentTarget.style.backgroundColor = '#8a3a3a';
-                            e.currentTarget.style.transform = 'scale(1.05)';
-                            }}
-                                onMouseOut={(e) => {
-                                    e.currentTarget.style.backgroundColor = '#5a2a2a';
-                                    e.currentTarget.style.transform = 'scale(1)';
-                                }}
-                            >
-                                Delete
-                            </button>
+                        <DeleteButton onConfirm={() => removeQuest(quest.id)} />
                     </div>
 
                     {/* Expanded Content */}
